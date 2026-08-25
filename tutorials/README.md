@@ -54,6 +54,10 @@ current working directory.
 | 12 | [tutorial_12_lung_end_to_end_inference.py](tutorial_12_lung_end_to_end_inference.py) | `WorkflowConvertImageToVTK`, `WorkflowFitStatisticalModelToPatient`, `WorkflowInferMovement` (requires `[physicsnemo]` extra + `torch-geometric`) | DirLab-4DCT plus Tutorial 6 and 9 (lung) output |
 | 12 | [duke heart variant](tutorial_12_duke_heart_end_to_end_inference.py) | `ContourTools`, `WorkflowFitStatisticalModelToPatient`, `WorkflowInferMovement` (requires `[physicsnemo]` extra + `torch-geometric`) | Duke-Heart-4DLabelmaps plus Tutorial 6 and 9 (duke heart) output |
 | 13 | [tutorial_13_heart_and_lung_motion.py](tutorial_13_heart_and_lung_motion.py) | `WorkflowInferMovement`, `WorkflowFitStatisticalModelToPatient`, `ConvertVTKToUSD` (requires `[physicsnemo]` extra + `torch-geometric` + Simpleware Medical) | Chest-CT plus Tutorial 7 (lung) and Tutorial 9 (lung and duke heart) output |
+| 14 | [tutorial_14_lung_shape_parameter_sweep.py](tutorial_14_lung_shape_parameter_sweep.py) | `WorkflowEvaluateMovement`, `SegmentNVSegmentCTMRI` (requires `[physicsnemo]` extra + `torch-geometric`) | DirLab-4DCT plus Tutorial 8 and 9 (lung) output |
+| 14 | [duke heart variant](tutorial_14_duke_heart_shape_parameter_sweep.py) | `WorkflowEvaluateMovement` (requires `[physicsnemo]` extra + `torch-geometric`) | Duke-Heart-4DLabelmaps plus Tutorial 8 and 9 (duke heart) output |
+| 15 | [tutorial_15_lung_leave_one_out.py](tutorial_15_lung_leave_one_out.py) | `WorkflowCreateStatisticalModel`, `WorkflowFitStatisticalModelToPatient`, `WorkflowTrainPhysicsNeMo`, `WorkflowEvaluateMovement` (requires `[physicsnemo]` extra + `torch-geometric`) | DirLab-4DCT |
+| 15 | [duke heart variant](tutorial_15_duke_heart_leave_one_out.py) | `WorkflowCreateStatisticalModel`, `WorkflowFitStatisticalModelToPatient`, `WorkflowTrainPhysicsNeMo`, `WorkflowEvaluateMovement` (requires `[physicsnemo]` extra + `torch-geometric`) | Duke-Heart-4DLabelmaps |
 
 The [tutorials page](https://project-monai.github.io/physiotwin4d/tutorials.html)
 covers the same set with previews of what each one produces and per-tutorial
@@ -115,12 +119,14 @@ its own anatomy's earlier tutorials, never the other's.
 6. **Tutorial 6** creates the PCA statistical model; the heart variant from KCL-Heart-Model, the lung variant from the DirLab-4DCT `Case*T70.mha` phases, which it segments itself. Both write `pca_model.json` and `pca_mean_surface.vtp` under their own output directory.
 7. **Tutorial 7** applies the statistical model, consuming its own anatomy's Tutorial 6 output; the heart variant fits the Tutorial 6 (heart) model, the lung variant fits the Tutorial 6 (lung) model to the ungated `Chest-CT` scan (`physiotwin4d-download-data Chest-CT`; see `data/Chest-CT/README.md` for the data source and required citation).
 
-The AI-surrogate pipeline (Tutorials 8 -> 9 -> 10 -> 11 -> 12) runs on DIR-Lab
-and the Tutorial 6 lung model, in order:
+The AI-surrogate pipeline (Tutorials 8 -> 9 -> 10 -> 11 -> 12, plus 14 and 15)
+runs on DIR-Lab and the Tutorial 6 lung model, in order. Tutorials 14 and 15
+branch off the chain rather than continuing it: 14 needs only the Tutorial 8 fit
+and the Tutorial 9 checkpoint, and 15 needs neither, rebuilding both per fold:
 
 8. **Tutorial 8** fits the lung PCA model to each case's reference phase and propagates the fitted SSM surface through every respiratory phase (output feeds Tutorial 9). It uses the Tutorial 2 ICON weights when they exist.
 9. **Tutorial 9** trains a PhysicsNeMo MeshGraphNet to predict the per-vertex motion at any stage. PhysicsNeMo is an optional extra: install with `pip install "physiotwin4d[physicsnemo]"` (requires Python >= 3.11); the MeshGraphNet also needs `torch-geometric`. A `TrainPhysicsNeMoMLP` method exists as a drop-in alternative, without its own tutorial.
-10. **Tutorial 10** loads that checkpoint and predicts the held-out case's surface at every acquired stage, scoring each against its acquired phase, warping the reference-phase CT through the inferred deformation, and exporting one animated USD. The case and checkpoint epoch are constants near the top of the script; for command-line runs with path arguments, use the installed `physiotwin4d-infer-physicsnemo` CLI.
+10. **Tutorial 10** loads that checkpoint and predicts the held-out case's surface at every acquired stage, warping the reference-phase CT through the inferred deformation and exporting one animated USD. It renders the acquired frame surface beside the prediction for visual comparison but does not score it; scoring is Tutorial 11's job. The case and checkpoint epoch are constants near the top of the script; for command-line runs with path arguments, use the installed `physiotwin4d-infer-physicsnemo` CLI.
 11. **Tutorial 11** scores the same prediction against the images rather than against the registration: it segments every gated frame independently, then reports volume difference and surface RMSE per lung lobe (per heart chamber, with Dice, in the duke variant) as `evaluation_report.md` and `evaluation_metrics.csv`. The lung variant leaves Dice out: a lobe moves little compared to its own size, so the overlap fraction describes the lobe rather than the motion.
 12. **Tutorial 12** collapses the whole chain into one script: it segments the reference frame, fits the Tutorial 6 model to that patient itself, and infers every stage - so nothing is read from Tutorial 8 and no phase is ever registered. It needs only the gated series plus the Tutorial 6 model and the Tutorial 9 checkpoint, and it wipes its output directory on every run so the reported runtimes in `<case>_runtimes.csv` cover the entire pipeline.
 
@@ -132,10 +138,36 @@ model it fits to the same scan. Nothing in it registers anything or needs a 4D
 acquisition. Each model is fitted through the segmenter that built it, so the
 heart step calls Simpleware Medical.
 
+**Tutorial 14** asks how much the shape parameters matter. It re-runs the
+Tutorial 11 scoring for the same hold-out case over a grid of PCA coefficient
+offsets - the first few modes, swept from -1 to +1 standard deviations in steps
+of 0.5 - feeding each perturbed vector to the Tutorial 9 network while holding
+the patient's fitted surface fixed, so the only thing that changes is the motion
+the network infers. Dice, volume difference and surface RMSE for every
+combination land in `shape_sweep_metrics.csv`, averaged per combination in
+`shape_sweep_summary.csv`. The default grid is 25 combinations, each costing one
+Tutorial 11 run; `number_of_modes_to_vary`, `perturbation_range` and
+`perturbation_step` near the top of the script set its size.
+
+**Tutorial 15** stops trusting a single hold-out. It re-runs the whole chain -
+shape model, cohort fit, MeshGraphNet training, inference and scoring - once per
+fold, holding out a different case each time, and reports Dice, volume
+difference and surface RMSE as a mean and a spread across folds rather than as
+one number. `number_of_leave_one_out_runs` near the top of the script sets the
+fold count and defaults to 5. Nothing from Tutorials 6, 8 or 9 is required: it
+builds its own model per fold, because a model built once from everyone has
+already seen every case. Segmentations and, for the lung, the phase
+registrations do not depend on which case is held out, so they are cached under
+`shared/` and reused. Written for a multi-GPU Linux host:
+under `torchrun --standalone --nproc_per_node=<gpus>` the training is
+data-parallel across ranks and the per-case loops are split across them.
+
 The `duke_heart` variants form their own chain on Duke-Heart-4DLabelmaps,
 which no step above shares: Tutorial 4 (duke heart) -> 5 -> 6 -> 7 -> 8 -> 9 ->
 10 -> 11 -> 12, each reading the previous one's output, with Tutorial 2 (heart
 distancemap variant) supplying optional finetuned weights to Tutorials 7 and 8.
+Tutorials 14 and 15 (duke heart) branch off the same chain on the same dataset,
+14 from Tutorials 8 and 9, 15 from the cohort alone.
 That dataset is being released soon; until then this chain cannot be run, and
 access can be requested from Stephen Aylward (<saylward@nvidia.com>). See
 [../data/Duke-Heart-4DLabelmaps/README.md](../data/Duke-Heart-4DLabelmaps/README.md).

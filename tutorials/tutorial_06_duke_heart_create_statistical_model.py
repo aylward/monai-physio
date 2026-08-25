@@ -75,6 +75,21 @@ if __name__ == "__main__":
     # Points kept per surface; see the parameters module.
     model_points = DUKE_HEART.model_points
 
+    # Distance-map weights finetuned by
+    # tutorial_02_duke_heart_distancemap_finetune_icon.py.  Stock uniGradICON weights
+    # are out of distribution for distance maps, so without these the
+    # correspondences this model is built from barely move off the template,
+    # and the modes come out far too tight.  Tutorial 7 fits with the same
+    # checkpoint.
+    icon_weights_path = (
+        tutorials_dir
+        / "network_weights"
+        / "icon_duke_heart_distancemap"
+        / "icon_duke_heart_distancemap_model"
+        / "checkpoints"
+        / "network_weights_final.trch"
+    )
+
     log_level = logging.INFO
 
     # Directory setup and data reading
@@ -113,15 +128,44 @@ if __name__ == "__main__":
     # unbiased mean of the population instead. Cached: it costs one deformable
     # registration per case per atlas iteration.
     reference_surface_file = output_dir / "reference_mean_surface.vtp"
-    if not reference_surface_file.exists():
+    # Keyed on the settings the atlas was corresponded with, not on the file
+    # merely being there: reusing an atlas built at one dilation, saturation
+    # radius or checkpoint while the model below corresponds its samples at
+    # another is the one way the two can disagree without saying so.
+    mean_surface_settings = {
+        "iterations": mean_surface_iterations,
+        "mask_dilation_mm": DUKE_HEART.mask_dilation_mm,
+        "distance_squared_max": DUKE_HEART.distancemap_squared_max,
+        "icon_weights": (
+            [str(icon_weights_path), icon_weights_path.stat().st_mtime_ns]
+            if icon_weights_path.exists()
+            else None
+        ),
+    }
+    settings_file = output_dir / "reference_mean_surface_settings.json"
+    cached_settings = (
+        json.loads(settings_file.read_text(encoding="utf-8"))
+        if reference_surface_file.exists() and settings_file.exists()
+        else None
+    )
+    if cached_settings != mean_surface_settings:
         mean_workflow = WorkflowCreateMeanSurface(
             surfaces=sample_surfaces,
             template_surface=sample_surfaces[len(sample_surfaces) // 2],
             log_level=log_level,
         )
         mean_workflow.set_number_of_iterations(mean_surface_iterations)
+        # Correspond the atlas with the same settings the model below uses, so
+        # the template is not itself built from under-fitting registrations.
+        mean_workflow.set_mask_dilation_mm(DUKE_HEART.mask_dilation_mm)
+        mean_workflow.set_distance_squared_max(DUKE_HEART.distancemap_squared_max)
+        if icon_weights_path.exists():
+            mean_workflow.set_icon_weights_path(str(icon_weights_path))
         mean_result = mean_workflow.process()
         mean_result["mean_surface"].save(str(reference_surface_file))
+        settings_file.write_text(
+            json.dumps(mean_surface_settings, indent=2), encoding="utf-8"
+        )
     reference_surface = pv.read(str(reference_surface_file))
 
     # Workflow initialization
@@ -130,8 +174,26 @@ if __name__ == "__main__":
         sample_meshes=sample_surfaces,
         reference_mesh=reference_surface,
         number_of_pca_components=number_of_pca_components,
+        icp_transform_type=DUKE_HEART.icp_transform_type,
+        mask_dilation_mm=DUKE_HEART.mask_dilation_mm,
+        distance_squared_max=DUKE_HEART.distancemap_squared_max,
         log_level=log_level,
     )
+
+    # Build the correspondences with the same distance-map scaling and weights
+    # Tutorial 7 fits with, so the model and the fit measure shape alike.
+    if icon_weights_path.exists():
+        workflow.set_icon_weights_path(str(icon_weights_path))
+    else:
+        workflow.log_warning(
+            "Finetuned distance-map ICON weights not found at %s; building the "
+            "model with the stock uniGradICON weights, which are out of "
+            "distribution for distance maps and will understate the "
+            "population's variance. Run "
+            "tutorials/tutorial_02_duke_heart_distancemap_finetune_icon.py "
+            "to create them.",
+            icon_weights_path,
+        )
 
     # Workflow execution
     result = workflow.process()

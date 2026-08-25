@@ -770,8 +770,9 @@ class ContourTools(PhysioTwin4DBase):
 
         Remeshing rebuilds the topology and so discards cell data, exactly as
         ``decimate_pro`` did: per-cell ``boundary_labels`` (needed for anatomy
-        splitting downstream) are transferred back onto the new cells from their
-        nearest original cell so anatomy materials still apply.  Uniform
+        splitting downstream) and ``SegmentationLabelIds`` (which structure each
+        triangle belongs to) are transferred back onto the new cells from their
+        nearest original cell so anatomy materials and structure ids still apply.  Uniform
         triangles cannot represent a label patch smaller than one of them,
         though, so such a patch is absorbed by its neighbours and its label pair
         disappears -- a warning names the pairs lost.  ``decimate_pro`` kept
@@ -802,11 +803,20 @@ class ContourTools(PhysioTwin4DBase):
                 max(4, round(original.n_points * (1.0 - surface_reduction_rate)))
             )
             conditioned = clustering.create_mesh()
+            carried = [
+                name
+                for name in ("boundary_labels", "SegmentationLabelIds")
+                if name in original.cell_data
+            ]
+            if carried:
+                nearest = original.find_closest_cell(conditioned.cell_centers().points)
+                for name in carried:
+                    conditioned.cell_data[name] = np.asarray(original.cell_data[name])[
+                        nearest
+                    ]
+
             if "boundary_labels" in original.cell_data:
                 labels = np.asarray(original.cell_data["boundary_labels"])
-                nearest = original.find_closest_cell(conditioned.cell_centers().points)
-                conditioned.cell_data["boundary_labels"] = labels[nearest]
-
                 pairs = labels.reshape(len(labels), -1)
                 before = {tuple(row) for row in np.unique(pairs, axis=0).tolist()}
                 after = {
@@ -1262,7 +1272,7 @@ class ContourTools(PhysioTwin4DBase):
             == reference_image.GetLargestPossibleRegion().GetSize()
         )
 
-        blurred_norm = itk.SmoothingRecursiveGaussianImageFilter(
+        blurred_norm = itk.smoothing_recursive_gaussian_image_filter(
             Input=norm_img, Sigma=blur_sigma
         )
         blurred_norm_arr = itk.GetArrayFromImage(blurred_norm)
@@ -1270,19 +1280,19 @@ class ContourTools(PhysioTwin4DBase):
 
         deformation_field_x_img = itk.GetImageFromArray(displacement_map_x)
         deformation_field_x_img.CopyInformation(reference_image)
-        deformation_field_x_img = itk.SmoothingRecursiveGaussianImageFilter(
+        deformation_field_x_img = itk.smoothing_recursive_gaussian_image_filter(
             Input=deformation_field_x_img, Sigma=blur_sigma
         )
 
         deformation_field_y_img = itk.GetImageFromArray(displacement_map_y)
         deformation_field_y_img.CopyInformation(reference_image)
-        deformation_field_y_img = itk.SmoothingRecursiveGaussianImageFilter(
+        deformation_field_y_img = itk.smoothing_recursive_gaussian_image_filter(
             Input=deformation_field_y_img, Sigma=blur_sigma
         )
 
         deformation_field_z_img = itk.GetImageFromArray(displacement_map_z)
         deformation_field_z_img.CopyInformation(reference_image)
-        deformation_field_z_img = itk.SmoothingRecursiveGaussianImageFilter(
+        deformation_field_z_img = itk.smoothing_recursive_gaussian_image_filter(
             Input=deformation_field_z_img, Sigma=blur_sigma
         )
 
