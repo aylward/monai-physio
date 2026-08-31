@@ -34,6 +34,11 @@ network.
    * - :class:`~physiotwin4d.InferPhysicsNeMoMGN` /
        :class:`~physiotwin4d.InferPhysicsNeMoMLP`
      - The matching networks at inference time
+   * - :class:`~physiotwin4d.TrainPhysicsNeMoPhysicsInformedMotion`
+     - A MeshGraphNet whose loss also prices the tissue's strain energy. It
+       predicts displacement, as the others do; the stress that deformation
+       implies comes from ``NeoHookeanResidual.cauchy_stress`` afterwards, as
+       Tutorial 18 does it
 
 PhysicsNeMo is an optional dependency::
 
@@ -50,3 +55,4 @@ imports happen lazily inside the methods that need them.
    train
    infer
    evaluate
+   physics_informed_motion

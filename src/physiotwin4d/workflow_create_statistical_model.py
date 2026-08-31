@@ -134,7 +134,6 @@ class WorkflowCreateStatisticalModel(PhysioTwin4DBase):
         self.sample_ids: list[str] = []
         self.aligned_models: list[pv.DataSet] = []
         self.forward_transforms: list = []
-        self.inverse_transforms: list = []
         self.pca_input_models: list[pv.DataSet] = []
         self.pca_input_residual_rms: list[float] = []
         self.pca_fitted: Optional[PCA] = None
@@ -212,7 +211,6 @@ class WorkflowCreateStatisticalModel(PhysioTwin4DBase):
         assert self.reference_model is not None and self.sample_models
         self.aligned_models = []
         self.forward_transforms = []
-        self.inverse_transforms = []
 
         reference_surface = self.contour_tools.extract_surface(self.reference_model)
         for i, (sid, moving) in enumerate(zip(self.sample_ids, self.sample_models)):
@@ -237,7 +235,6 @@ class WorkflowCreateStatisticalModel(PhysioTwin4DBase):
                 )
             self.aligned_models.append(aligned_model)
             self.forward_transforms.append(result["forward_point_transform"])
-            self.inverse_transforms.append(result["inverse_point_transform"])
         self.log_info("ICP alignment complete for %d samples", len(self.aligned_models))
 
     def _step3_deformable_correspondence(self) -> None:
@@ -260,7 +257,6 @@ class WorkflowCreateStatisticalModel(PhysioTwin4DBase):
             ptype=itk.UC,
         )
         self.forward_transforms = []
-        self.inverse_transforms = []
 
         for i, (sid, moving) in enumerate(zip(self.sample_ids, self.aligned_models)):
             self.log_info(
@@ -282,8 +278,10 @@ class WorkflowCreateStatisticalModel(PhysioTwin4DBase):
                 transform_type="Deformable",
             )
 
+            # Only the forward transform is kept.  Each one owns dense
+            # full-grid displacement fields, and holding the inverse as well
+            # doubled the cost of a population for a value nothing read.
             self.forward_transforms.append(result["forward_transform"])
-            self.inverse_transforms.append(result["inverse_transform"])
 
         # aligned_models stays the ICP-aligned input: step 4 measures the
         # corresponded shapes against it.
@@ -306,6 +304,10 @@ class WorkflowCreateStatisticalModel(PhysioTwin4DBase):
         variance with it.  The shortfall is measured here against the measured
         ICP-aligned surface, and removed when ``project_to_measured_surfaces``
         is set, so that the modes are scaled by the population's real spread.
+
+        For a volume template only the boundary nodes are measured, since an
+        interior node's distance to the bounding surface says nothing about how
+        well the registration landed.
         """
         self.log_section("Step 4: Build PCA inputs (corresponded shapes)", width=70)
         assert self.reference_model is not None and self.forward_transforms
@@ -331,11 +333,25 @@ class WorkflowCreateStatisticalModel(PhysioTwin4DBase):
             )
             measured_surface = self.contour_tools.extract_surface(aligned)
             points = np.asarray(pca_input_model.points)
+            measured_ids: Any = slice(None)
+            if not self.solve_for_surface_pca:
+                # A volume template's interior nodes sit a wall thickness away
+                # from the bounding surface by construction, so scoring them
+                # against it would report that thickness rather than the
+                # registration's shortfall.  Only the boundary is measured.
+                measured_ids = np.asarray(
+                    pca_input_model.extract_surface(
+                        algorithm="dataset_surface"
+                    ).point_data["vtkOriginalPointIds"]
+                )
+            measured_points = points[measured_ids]
             _, closest = cast(
                 "tuple[np.ndarray, np.ndarray]",
-                measured_surface.find_closest_cell(points, return_closest_point=True),
+                measured_surface.find_closest_cell(
+                    measured_points, return_closest_point=True
+                ),
             )
-            residuals = np.linalg.norm(closest - points, axis=1)
+            residuals = np.linalg.norm(closest - measured_points, axis=1)
             self.pca_input_residual_rms.append(float(np.sqrt(np.mean(residuals**2))))
             if project:
                 if self.projection_max_distance_mm is None:

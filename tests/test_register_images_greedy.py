@@ -15,7 +15,7 @@ import pytest
 from physiotwin4d.register_images_greedy import RegisterImagesGreedy
 from physiotwin4d.transform_tools import TransformTools
 
-from .conftest import KnownShiftCase
+from .conftest import KnownAffineCase, KnownShiftCase
 
 
 @pytest.mark.slow
@@ -225,6 +225,82 @@ class TestRegisterImagesGreedy:
         assert ncc > unregistered_ncc, (
             f"Greedy {transform_type} left the images less aligned than they "
             f"started ({ncc:.4f} vs {unregistered_ncc:.4f})"
+        )
+
+    def test_recovers_a_known_affine_at_any_distance_from_the_origin(
+        self,
+        known_affine_case_near_origin: KnownAffineCase,
+        known_affine_case_far_from_origin: KnownAffineCase,
+    ) -> None:
+        """Recovering a known rotation must not depend on where the grid sits.
+
+        ``test_recovers_known_shift`` moves content by a pure translation, so the
+        affine's linear block is the identity and every reading of that block
+        agrees. This rotates, and runs the same rotation twice: once near the
+        world origin, once on a grid at ``z ~ 1800 mm`` -- the CT table
+        coordinates the cardiac cohorts live in.
+
+        The comparison between the two is the measurement, not either error on
+        its own. ``RegisterImagesGreedy._matrix_to_itk_affine`` reads Greedy's
+        4x4 as a world affine about the origin, ``y = Mx + t``, and encodes it
+        with ``SetCenter(0, 0, 0)``. If that reading is right, distance from the
+        origin is irrelevant and the two cases score alike. If it is wrong, the
+        error scales with ``|p|``, so a few degrees at ``z ~ 1800`` becomes tens
+        of millimeters while the near case stays clean.
+
+        Absolute error on a single attempt is the wrong instrument. Greedy
+        seeds nondeterministically and diverges outright every few runs --
+        ``vnl_lbfgs`` reports a Netlib failure and the recovered affine is
+        hundreds of millimeters out -- and it does so far more readily at
+        ``z ~ 1800`` than near the origin, because an affine applied about the
+        world origin is badly conditioned that far from it. That unreliability
+        is real, and is the same divergence that strands ICON with a constant
+        image, but it is a separate concern from the question here. So each grid
+        gets a few attempts and is judged on its best: a misread convention
+        would fail *every* attempt at ``z ~ 1800``, not one in three.
+
+        The probes are spread across the volume rather than taken at its center,
+        because a linear-block error is invisible at a single point -- any one
+        displacement can be absorbed by the translation.
+        """
+
+        def best_of(case: KnownAffineCase, attempts: int = 3) -> float:
+            errors = []
+            for _ in range(attempts):
+                registrar = RegisterImagesGreedy()
+                registrar.set_modality("ct")
+                registrar.set_transform_type("Affine")
+                registrar.set_number_of_iterations([60, 30, 10])
+                registrar.set_fixed_image(case.fixed)
+                result = registrar.register(moving_image=case.moving)
+                errors.append(
+                    float(case.probe_errors_mm(result["forward_transform"]).max())
+                )
+            diverged = sum(1 for value in errors if value > 10.0)
+            print(
+                f"  offset {case.origin_offset_mm}: worst-probe "
+                f"{np.round(errors, 2).tolist()} mm, {diverged}/{attempts} diverged"
+            )
+            return min(errors)
+
+        print("Greedy known-affine recovery:")
+        near = best_of(known_affine_case_near_origin)
+        far = best_of(known_affine_case_far_from_origin)
+        print(f"  best near={near:.2f} mm  far={far:.2f} mm")
+
+        assert far < 4.0, (
+            f"Greedy never recovered the known affine at z ~ 1800 mm; its best "
+            f"of three attempts was {far:.2f} mm off at the worst probe, against "
+            f"{near:.2f} mm near the origin. Failing every attempt only far from "
+            "the origin means the linear block is not the world-origin affine "
+            "that RegisterImagesGreedy._matrix_to_itk_affine assumes when it "
+            "pairs SetMatrix(M) with SetCenter(0, 0, 0)."
+        )
+        assert far - near < 3.0, (
+            f"Recovery degraded by {far - near:.2f} mm when the same rotation "
+            f"moved to z ~ 1800 mm (near {near:.2f} mm, far {far:.2f} mm), which "
+            "is the signature of a linear block being applied about the wrong "
+            "center."
         )
 
     def test_transform_application(
