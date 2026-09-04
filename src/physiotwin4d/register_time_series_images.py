@@ -11,9 +11,10 @@ CT where sequential frames need to be registered to a common frame.
 """
 
 import logging
-from typing import Optional, Union, cast
+from typing import Literal, Optional, Union, cast
 
 import itk
+import numpy as np
 
 from .register_images_base import RegisterImagesBase
 from .register_images_greedy import RegisterImagesGreedy
@@ -320,6 +321,8 @@ class RegisterTimeSeriesImages(RegisterImagesBase):
         moving_images: list[itk.Image],
         inverse_transforms: list[itk.Transform],
         upsample_to_fixed_resolution: bool = False,
+        forward_transforms: Optional[list[itk.Transform]] = None,
+        composite_mode: Literal["reference", "mean", "max"] = "reference",
     ) -> list[itk.Image]:
         """Reconstruct time series images using inverse transforms.
 
@@ -327,6 +330,14 @@ class RegisterTimeSeriesImages(RegisterImagesBase):
         in the fixed image space. If upsample_to_fixed_resolution is enabled,
         the reconstructed images will use isotropic spacing (mean of fixed image's
         X and Y spacing) while maintaining each moving image's original origin and direction.
+
+        By default (composite_mode="reference"), the fixed/reference image is
+        warped back to each time point. When composite_mode is "mean" or
+        "max", a single composite image is built first -- the pixel-by-pixel
+        mean or max across the fixed image and every moving image warped onto
+        the fixed grid via forward_transforms -- and that composite is warped
+        back to each time point instead. This lets anatomy or contrast only
+        visible in some frames propagate into every reconstructed time point.
 
         Args:
             moving_images (list[itk.Image]): List of moving images to reconstruct
@@ -337,6 +348,14 @@ class RegisterTimeSeriesImages(RegisterImagesBase):
                 images will be upsampled to isotropic resolution (mean of fixed image's
                 X and Y spacing) while maintaining their original origin and direction.
                 Default: False
+            forward_transforms (list[itk.Transform], optional): List of forward
+                transforms (one per moving image), each used to warp that moving
+                image onto the fixed grid. Required when composite_mode is
+                "mean" or "max". Default: None
+            composite_mode (Literal["reference", "mean", "max"], optional):
+                Which image to warp back to each time point. "reference" uses
+                the fixed image as-is (default). "mean"/"max" build a composite
+                of the fixed image and all registered moving images first.
 
         Returns:
             list[itk.Image]: List of reconstructed images in fixed image space
@@ -344,6 +363,8 @@ class RegisterTimeSeriesImages(RegisterImagesBase):
         Raises:
             ValueError: If fixed_image is not set
             ValueError: If lengths of moving_images and inverse_transforms don't match
+            ValueError: If composite_mode is "mean"/"max" and forward_transforms
+                is not provided or its length doesn't match moving_images
 
         Example:
             >>> greedy = RegisterImagesGreedy()
@@ -372,6 +393,26 @@ class RegisterTimeSeriesImages(RegisterImagesBase):
                 f"number of inverse transforms ({len(inverse_transforms)})"
             )
 
+        if composite_mode == "reference":
+            source_image = self.fixed_image
+        elif composite_mode in ("mean", "max"):
+            if forward_transforms is None or len(forward_transforms) != len(
+                moving_images
+            ):
+                raise ValueError(
+                    "forward_transforms must be provided and match "
+                    "moving_images length when composite_mode is "
+                    f"{composite_mode!r}"
+                )
+            source_image = self._compute_composite_reference(
+                moving_images, forward_transforms, composite_mode
+            )
+        else:
+            raise ValueError(
+                "composite_mode must be 'reference', 'mean', or 'max', "
+                f"got {composite_mode!r}"
+            )
+
         reconstructed_images: list[itk.Image] = []
 
         for moving_image, inverse_transform in zip(moving_images, inverse_transforms):
@@ -382,21 +423,99 @@ class RegisterTimeSeriesImages(RegisterImagesBase):
                     moving_image, self.fixed_image
                 )
             else:
-                # Use fixed image as reference
+                # Use the moving image's own grid as the output space
                 reference_image = moving_image
 
-            # Transform the moving image to the reference space.  The fixed
+            # Transform the source image to the reference space.  The source
             # image is an intensity image, so voxels sampled outside it take the
             # modality's "no tissue" value, not 0.
             reconstructed = self.transform_tools.transform_image(
-                self.fixed_image,
+                source_image,
                 inverse_transform,
                 reference_image,
-                background_value=self._prewarp_background_value(self.fixed_image),
+                background_value=self._prewarp_background_value(source_image),
             )
             reconstructed_images.append(reconstructed)
 
         return reconstructed_images
+
+    def _compute_composite_reference(
+        self,
+        moving_images: list[itk.Image],
+        forward_transforms: list[itk.Transform],
+        mode: Literal["mean", "max"],
+    ) -> itk.Image:
+        """Build a composite reference image from the fixed image and moving images.
+
+        Warps every moving image onto the fixed grid using its
+        forward_transform, then combines those registered images with the
+        fixed image pixel-by-pixel using the given reduction. Moving images
+        whose extent does not fully cover the fixed grid contribute only
+        where they actually have data -- voxels resampled from outside a
+        moving image's bounds (extrapolated fill) are excluded from the
+        reduction rather than treated as real samples. The fixed image
+        counts as one valid sample at every voxel.
+
+        Args:
+            moving_images (list[itk.Image]): Moving images to warp and combine
+            forward_transforms (list[itk.Transform]): One forward transform per
+                moving image, warping it onto the fixed grid
+            mode (Literal["mean", "max"]): Pixel-wise reduction to apply
+
+        Returns:
+            itk.Image: Composite image on the fixed image's grid
+        """
+        assert self.fixed_image is not None
+        fixed_arr = itk.GetArrayViewFromImage(self.fixed_image)
+        dtype = fixed_arr.dtype
+
+        # float32 keeps peak memory bounded for large volumes; only widen to
+        # float64 when the source data already needs it. A float accumulator
+        # (rather than the fixed image's own dtype) also keeps np.maximum
+        # from raising when a moving image's pixel type is floating point
+        # but the fixed image's is integer.
+        accumulator_dtype = np.float64 if dtype == np.float64 else np.float32
+        accumulator = fixed_arr.astype(accumulator_dtype)
+        if mode == "mean":
+            valid_count = np.ones_like(accumulator)
+
+        for moving_image, forward_transform in zip(moving_images, forward_transforms):
+            registered = self.transform_tools.transform_image(
+                moving_image,
+                forward_transform,
+                self.fixed_image,
+                background_value=self._prewarp_background_value(moving_image),
+            )
+            registered_arr = itk.GetArrayViewFromImage(registered)
+
+            moving_shape = itk.GetArrayViewFromImage(moving_image).shape
+            coverage_image = itk.image_from_array(np.ones(moving_shape, dtype=np.uint8))
+            coverage_image.CopyInformation(moving_image)
+            registered_coverage = self.transform_tools.transform_image(
+                coverage_image,
+                forward_transform,
+                self.fixed_image,
+                interpolation_method="nearest",
+                background_value=0,
+            )
+            valid_mask = itk.GetArrayViewFromImage(registered_coverage) != 0
+
+            if mode == "mean":
+                accumulator += np.where(valid_mask, registered_arr, 0)
+                valid_count += valid_mask
+            else:
+                masked = np.where(valid_mask, registered_arr, accumulator)
+                np.maximum(accumulator, masked, out=accumulator)
+
+        if mode == "mean":
+            accumulator /= valid_count
+            if np.issubdtype(dtype, np.integer):
+                accumulator = np.round(accumulator)
+        reduced = accumulator.astype(dtype)
+
+        composite = itk.image_from_array(np.ascontiguousarray(reduced))
+        composite.CopyInformation(self.fixed_image)
+        return composite
 
     def _create_upsampled_reference(
         self, moving_image: itk.Image, fixed_image: itk.Image
