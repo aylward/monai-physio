@@ -4,33 +4,33 @@ This module holds the pieces common to the MeshGraphNet (MGN) and fully
 connected (MLP) PhysicsNeMo workflows so the workflow classes stay focused on
 orchestration.  It provides:
 
-- :class:`SubjectManifest` / :func:`parse_manifest` — the per-subject JSON
+- :class:`SubjectManifest` / :func:`parse_manifest` - the per-subject JSON
   manifest that lists a fitted reference mesh, a PCA shape-parameter file, the
   name of the point-data array holding the training targets, and the phase
   meshes that carry that array with their stages.
-- :func:`load_target_array` — read one phase's ``(n_points, n_target)`` target
+- :func:`load_target_array` - read one phase's ``(n_points, n_target)`` target
   values out of a mesh's point data.
-- :func:`build_node_features` — the shared per-vertex feature layout
+- :func:`build_node_features` - the shared per-vertex feature layout
   ``[mean_coords_norm, pca_norm (tiled), stage]`` used by both networks.
-- :func:`mesh_to_edge_index` / :func:`compute_edge_features` — MGN mesh-graph
+- :func:`mesh_to_edge_index` / :func:`compute_edge_features` - MGN mesh-graph
   construction from the shared template mesh (surface or volumetric).
-- :func:`uncompiled_state_dict` / :func:`strip_compile_prefix` — checkpoint I/O
+- :func:`uncompiled_state_dict` / :func:`strip_compile_prefix` - checkpoint I/O
   that is robust to ``torch.compile`` and ``DistributedDataParallel`` wrapping.
-- :class:`DistributedContext` / :func:`distributed_context` — the rank, device
+- :class:`DistributedContext` / :func:`distributed_context` - the rank, device
   and world size of the current process, from PhysicsNeMo's
   ``DistributedManager``.  A run started without a launcher gets world size 1,
   so single-process callers need no distributed-specific code.
-- :class:`PhaseSampleDataset` — a lazy ``(subject, phase)`` sample provider with
+- :class:`PhaseSampleDataset` - a lazy ``(subject, phase)`` sample provider with
   a bounded in-RAM cache so the training set need not fit in memory.
 
 Targets are whatever the caller stored in the manifest's ``target_array``: the
-stack never computes them.  A displacement model is one application of that —
-the caller writes ``phase.points - reference.points`` into the array — but any
+stack never computes them.  A displacement model is one application of that -
+the caller writes ``phase.points - reference.points`` into the array - but any
 per-point vector of any width works the same way.
 
-``torch`` and ``torch_geometric`` are optional dependencies; every function that
-needs them imports them locally so ``import monai_physio`` works without the
-``[physicsnemo]`` extra installed.
+``torch`` and ``torch_geometric`` are base dependencies, but every function
+that needs them still imports them locally to keep ``import monai_physio``
+lightweight.
 """
 
 from __future__ import annotations
@@ -47,6 +47,56 @@ import pyvista as pv
 
 if TYPE_CHECKING:  # imported lazily at runtime; typed here for mypy only
     import torch
+    from physicsnemo.models.meshgraphnet import MeshGraphNet
+
+
+# --------------------------------------------------------------------------- #
+# MeshGraphNet import guard                                                    #
+# --------------------------------------------------------------------------- #
+def import_meshgraphnet() -> type[MeshGraphNet]:
+    """Import PhysicsNeMo's ``MeshGraphNet``, reporting install faults clearly.
+
+    PhysicsNeMo builds MeshGraphNet on ``torch_scatter``, a compiled extension
+    whose prebuilt wheels are published only for specific
+    ``(torch, CUDA, Python, platform)`` combinations. A wheel built against a
+    different torch than the installed one loads as an opaque
+    ``OSError: Could not load this library: ..._scatter_cuda.pyd``, which names
+    neither torch_scatter nor the version mismatch that caused it. Translate
+    that into a message that does.
+
+    Returns:
+        The ``physicsnemo.models.meshgraphnet.MeshGraphNet`` class.
+
+    Raises:
+        ImportError: PhysicsNeMo or PyTorch Geometric could not be imported, or
+            the installed ``torch_scatter`` binary does not match the installed
+            torch.
+    """
+    try:
+        import torch_geometric  # noqa: F401 - needed by the graph seams
+        from physicsnemo.models.meshgraphnet import MeshGraphNet
+    except OSError as exc:
+        if "scatter" not in str(exc).lower():
+            raise ImportError(
+                f"Failed to import MeshGraphNet's dependencies: {exc}"
+            ) from exc
+        import torch
+
+        raise ImportError(
+            "torch_scatter failed to load its compiled extension. It was "
+            "built against a different torch than the installed torch "
+            f"{torch.__version__}. Reinstall a torch_scatter matching this "
+            "torch, or install monai-physio[cuda12], whose torch pin stays "
+            "inside the range with prebuilt torch_scatter wheels. See the "
+            "installation guide for the platform-by-platform wheel matrix."
+        ) from exc
+    except ModuleNotFoundError as exc:
+        raise ImportError(
+            "MeshGraphNet requires PhysicsNeMo and PyTorch Geometric, which "
+            "are base dependencies of monai-physio. Reinstall with: "
+            "pip install --force-reinstall monai-physio"
+        ) from exc
+    return cast("type[MeshGraphNet]", MeshGraphNet)
 
 
 # --------------------------------------------------------------------------- #
@@ -341,14 +391,14 @@ def distributed_context() -> DistributedContext:
                 f"This process is 1 of {launched} in a distributed launch, but "
                 "PhysicsNeMo is not installed, and it is what assigns the "
                 "ranks. Without it every process would call itself rank 0 and "
-                "overwrite the others' output. Install with: pip install "
-                '"monai-physio[physicsnemo]", or run in a single process.'
+                "overwrite the others' output. Reinstall with: pip install "
+                "--force-reinstall monai-physio, or run in a single process."
             ) from exc
 
         import torch
 
-        # The MLP path does not otherwise need the [physicsnemo] extra, so a
-        # missing PhysicsNeMo means a single process rather than an error.
+        # The MLP path does not otherwise need PhysicsNeMo, so a missing
+        # PhysicsNeMo means a single process rather than an error.
         return DistributedContext(
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             rank=0,
@@ -419,7 +469,7 @@ class PhaseSampleDataset:
     normalized PCA parameters and the phase stage (cheap).  Only the phase
     target arrays are read from disk, and those are held in a bounded LRU cache
     so an arbitrarily large training set streams from disk while a small set
-    stays resident.  Targets are returned as stored — the dataset never derives
+    stays resident.  Targets are returned as stored - the dataset never derives
     them from geometry.
 
     Args:

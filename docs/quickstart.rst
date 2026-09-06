@@ -10,9 +10,11 @@ Prerequisites
 Before starting, ensure you have:
 
 * MONAI Physio installed (see :doc:`installation`)
-* NVIDIA GPU with CUDA 13 - recommended for production performance; see
-  :doc:`installation` for the ``[cuda13]`` extra. A CPU-only PyPI install works
-  for evaluation but is slow.
+* NVIDIA GPU with CUDA 12.6 or CUDA 13 - recommended for production
+  performance; see :doc:`installation` for the ``[cuda12]`` extra
+  (recommended, installs entirely from prebuilt wheels), ``[cuda13]``, or
+  ``--torch-backend=auto``. A CPU-only PyPI install works for evaluation but
+  is significantly slower.
 * Disk space for the sample datasets (~10-20 GB for the full set; each dataset
   README lists its own size)
 
@@ -45,7 +47,7 @@ are bare version strings, so use the installed version directly:
 A release tarball works just as well if you would rather not use git:
 ``https://github.com/Project-MONAI/monai-physio/archive/refs/tags/{{ mphysio_project_version }}.tar.gz``.
 
-No further installation step is needed after cloning — the scripts import
+No further installation step is needed after cloning - the scripts import
 ``monai_physio`` from your environment.
 
 Run every dataset download from the top level of the clone. The tutorials
@@ -118,7 +120,7 @@ as a plain script:
 
    python tutorials/tutorial_01_heart_gated_ct_to_usd.py
 
-:doc:`tutorials` is the full guide — thirteen numbered stages with previews of
+:doc:`tutorials` is the full guide - thirteen numbered stages with previews of
 what each one produces, the run order, and per-tutorial notes on pointing them
 at your own data. The rest of this page is the same functionality as a CLI call and as
 a Python API call, for when you would rather not start from a script.
@@ -200,7 +202,7 @@ segmentation and registration reference.
 That is the whole pipeline: 4D input to 3D frames, registration between
 phases, AI segmentation of the reference, contour transformation across time,
 and an animated USD scene. A 4D ``.seq.nrrd`` needs splitting into frames
-first — use ``monai-physio-convert-image-4d-to-3d`` or
+first - use ``monai-physio-convert-image-4d-to-3d`` or
 :class:`~monai_physio.ConvertImage4DTo3D`.
 
 :doc:`tutorials` walks the same call through real data with screenshots, and
@@ -308,24 +310,22 @@ See :doc:`cli_scripts/download_data` for sizes, source URLs, and directory
 layouts for every dataset.
 
 DirLab-4DCT data is manual-only; see ``data/DirLab-4DCT/README.md``. It drives
-the whole lung pipeline — Lung Tutorials 1, 2, 3, 4, 6 and 8, plus Heart
-Tutorial 7 — which then feeds the AI-surrogate Tutorials 9 through 12. Those
-additionally require the optional
-``physicsnemo`` extra (``pip install "monai-physio[physicsnemo]"``, plus
-``torch-geometric`` for the MeshGraphNet); PhysicsNeMo itself requires
-Python >= 3.11.
+the whole lung pipeline - Lung Tutorials 1, 2, 3, 4, 6 and 8, plus Heart
+Tutorial 7 - which then feeds the AI-surrogate Tutorials 9 through 12.
+PhysicsNeMo and ``torch-geometric`` (for the MeshGraphNet) are base
+dependencies of monai-physio; PhysicsNeMo itself requires Python >= 3.11.
 
 Visualizing Results
 ===================
 
-The workflows write OpenUSD scenes, and viewing them needs a USD viewer — use
+The workflows write OpenUSD scenes, and viewing them needs a USD viewer - use
 an Omniverse Kit application with RTX rendering, which is what evaluates the
 material properties assigned to each tissue. Note that the ``usd-core``
 package installed with MONAI Physio provides the OpenUSD *libraries* only and
 contains no viewer.
 
 :doc:`viewing_usd` covers where to get it, how to set it up, and how to open a
-MONAI Physio scene — including switching to the camera defined in the scene,
+MONAI Physio scene - including switching to the camera defined in the scene,
 whose clipping planes are fitted to the anatomy's scale.
 
 The intermediate meshes need no USD tooling:
@@ -343,7 +343,7 @@ Next Steps
 
 Now that you've completed your first workflow:
 
-* Work through :doc:`tutorials` — the primary guide to using and adapting the
+* Work through :doc:`tutorials` - the primary guide to using and adapting the
   toolkit
 * Read detailed :doc:`cli_scripts/overview` for unattended and production runs
 * Learn about :doc:`api/segmentation/index` options

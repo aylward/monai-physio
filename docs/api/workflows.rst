@@ -46,10 +46,10 @@ Available Workflows
      - Finetune uniGradICON on your own cohort and return the weights
        :class:`RegisterImagesICON` can load.
 
-The PhysicsNeMo AI-surrogate workflows — :class:`WorkflowTrainPhysicsNeMo`,
+The PhysicsNeMo AI-surrogate workflows - :class:`WorkflowTrainPhysicsNeMo`,
 :class:`WorkflowInferPhysicsNeMo`, :class:`WorkflowInferMovement` and
-:class:`WorkflowEvaluateMovement` — have their own section, since they need the
-optional ``[physicsnemo]`` extra. See :doc:`physicsnemo/index`.
+:class:`WorkflowEvaluateMovement` - have their own section. See
+:doc:`physicsnemo/index`.
 
 Convert Image to USD
 ====================

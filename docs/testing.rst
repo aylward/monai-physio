@@ -33,7 +33,7 @@ Flags compose. A typical local GPU profile is:
 
 ``--run-all`` is a convenience flag that turns on every ``--run-*`` bucket at
 once. The self-hosted CI GPU runner uses it (after installing
-``.[test,cuda13,physicsnemo]``):
+``.[dev,cuda13]``):
 
 .. code-block:: bash
 
@@ -45,7 +45,7 @@ builtin used to keep related tests on one worker. Tests carrying only these
 markers always run.
 
 ``tests/test_tutorials.py`` holds the ``tutorial`` bucket. It is not
-parametrized over the tutorials directory — it is one hand-written class per
+parametrized over the tutorials directory - it is one hand-written class per
 covered script, currently all 29 tutorial scripts, so adding a tutorial does
 not automatically add a test.
 
@@ -87,7 +87,7 @@ Continuous Integration
 ======================
 
 CI runs the fast subset by default. The self-hosted GPU runner installs
-``.[test,cuda13,physicsnemo]`` and invokes pytest with ``--run-all`` (which
+``.[dev,cuda13]`` and invokes pytest with ``--run-all`` (which
 enables every ``--run-*`` bucket); tests whose host requirements aren't met
 (e.g. a licensed Simpleware install on a runner without one) runtime-skip
 cleanly via their internal guards.

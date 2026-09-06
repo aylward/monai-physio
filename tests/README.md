@@ -33,7 +33,7 @@ This directory contains comprehensive test suites for the MONAI Physio package, 
 
 ### Workflow Tests
 - **`test_workflow_evaluate_movement.py`** - `WorkflowEvaluateMovement` metrics, CSV, and Markdown report
-- **`test_workflow_train_physicsnemo.py`** - `WorkflowTrainPhysicsNeMo` checkpoint plus the assets inference reads beside it (needs `[physicsnemo]`)
+- **`test_workflow_train_physicsnemo.py`** - `WorkflowTrainPhysicsNeMo` checkpoint plus the assets inference reads beside it
 
 ### Tutorial Tests (SLOW - Opt-in)
 - **`test_tutorials.py`** - End-to-end execution of each `tutorials/*.py` script,
@@ -76,7 +76,7 @@ If you clone after running `git lfs install`, LFS files are pulled automatically
 
 ### Install Dependencies
 ```bash
-uv pip install -e ".[test]"
+uv pip install -e ".[dev]"
 ```
 
 ### Run Tests
@@ -84,7 +84,7 @@ uv pip install -e ".[test]"
 The fast path is the default. Heavy buckets (slow tests, GPU tests, Simpleware
 tests, tutorial scripts) are **auto-skipped** unless you
 pass their `--run-<bucket>` flag. Tests that need downloadable data fetch it
-through the session fixtures and run by default — there is no `requires_data`
+through the session fixtures and run by default - there is no `requires_data`
 marker any more.
 
 ```bash
@@ -104,7 +104,7 @@ Each flag enables one marker family. Flags compose, so you can stack them.
 | `--run-slow` | `slow` | Slow registration / segmentation tests (>30 s) |
 | `--run-gpu` | `requires_gpu` | CUDA-dependent tests (ICON, Simpleware, etc.) |
 | `--run-simpleware` | `requires_simpleware` | Need a licensed Synopsys Simpleware Medical install (also marked `requires_gpu`) |
-| `--run-physicsnemo` | `requires_physicsnemo` | Need the optional `[physicsnemo]` extra installed |
+| `--run-physicsnemo` | `requires_physicsnemo` | PhysicsNeMo-dependent tests |
 | `--run-tutorials` | `tutorial` | Tutorial scripts run end-to-end (hours to run) |
 | `--run-all` | every bucket above | Equivalent to passing all `--run-*` flags at once |
 
@@ -121,7 +121,7 @@ pytest tests/ -v --run-all
 # Full Simpleware coverage (requires Simpleware Medical installed locally)
 pytest tests/ -v --run-simpleware --run-gpu --run-slow
 
-# Tutorial tests (SLOW — hours to complete)
+# Tutorial tests (SLOW - hours to complete)
 pytest tests/test_tutorials.py -v --run-tutorials
 
 # A single tutorial by name
@@ -157,20 +157,19 @@ tests.
 - **Output Organization**: Results saved to `tests/results/` by module
 
 ### Test Markers (all opt-in via a matching `--run-*` flag)
-- `@pytest.mark.slow` — Tests taking >30 seconds. Opt in: `--run-slow`.
-- `@pytest.mark.requires_gpu` — Tests needing CUDA. Opt in: `--run-gpu`.
-- `@pytest.mark.requires_simpleware` — Tests needing a licensed Synopsys
+- `@pytest.mark.slow` - Tests taking >30 seconds. Opt in: `--run-slow`.
+- `@pytest.mark.requires_gpu` - Tests needing CUDA. Opt in: `--run-gpu`.
+- `@pytest.mark.requires_simpleware` - Tests needing a licensed Synopsys
   Simpleware Medical install. Opt in: `--run-simpleware`. (Combine with
   `--run-gpu` and `--run-slow`.)
-- `@pytest.mark.requires_physicsnemo` — Tests needing the optional
-  `[physicsnemo]` extra (`pip install "monai-physio[physicsnemo]"`, requires
-  Python >= 3.11). Opt in: `--run-physicsnemo`.
-- `@pytest.mark.tutorial` — Tutorial scripts run end-to-end (SLOW, never in
+- `@pytest.mark.requires_physicsnemo` - Tests needing PhysicsNeMo (a base
+  dependency, requires Python >= 3.11). Opt in: `--run-physicsnemo`.
+- `@pytest.mark.tutorial` - Tutorial scripts run end-to-end (SLOW, never in
   CI). Opt in: `--run-tutorials`.
 
 `--run-all` is a convenience flag that turns on every `--run-*` bucket at once.
-- `@pytest.mark.integration` — Integration tests vs unit tests (filter-only).
-- `@pytest.mark.timeout(seconds)` — Per-test timeout override.
+- `@pytest.mark.integration` - Integration tests vs unit tests (filter-only).
+- `@pytest.mark.timeout(seconds)` - Per-test timeout override.
 
 The previous `requires_data` marker has been retired: tests that need
 downloadable data request the session fixtures (`test_directories`,
@@ -242,7 +241,7 @@ When creating new tests:
 
 1. **Name properly**: Use `test_` prefix for files and methods
 2. **Add markers**: `@pytest.mark.slow`, `@pytest.mark.requires_gpu`,
-   `@pytest.mark.requires_simpleware`, etc. — each one places the test in
+   `@pytest.mark.requires_simpleware`, etc. - each one places the test in
    its corresponding `--run-*` opt-in bucket.
 3. **Use fixtures**: Define shared fixtures in `conftest.py`
 4. **Document well**: Clear docstrings explaining what's validated

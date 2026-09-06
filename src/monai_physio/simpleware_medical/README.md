@@ -40,8 +40,8 @@ ConsoleSimplewareMedical.exe \
 
 The Python script then:
 ```python
-output_dir = app.GetInputValue()            # Output directory from --input-value
-doc = sw.App.GetDocument()                  # Active document (loaded NIfTI)
+output_dir = app.GetInputValue()  # Output directory from --input-value
+doc = sw.App.GetDocument()  # Active document (loaded NIfTI)
 as_cardio = doc.GetAutoSegmenters().GetASCardio()
 # ... run ASCardio, then export each mask to mask_<name>.mhd in output_dir ...
 ```
@@ -70,9 +70,9 @@ ct_image = itk.imread("heart_ct.nii.gz")
 result = segmenter.segment(ct_image)
 
 # Access results
-labelmap = result['labelmap']
-heart_mask = result['heart']
-vessel_mask = result['major_vessels']
+labelmap = result["labelmap"]
+heart_mask = result["heart"]
+vessel_mask = result["major_vessels"]
 
 # Save results
 itk.imwrite(labelmap, "heart_segmentation.nii.gz")
@@ -114,8 +114,8 @@ The ASCardio module segments the following cardiac structures (label IDs match `
 1. MONAI Physio preprocesses the CT image (resampling to 1 mm isotropic, intensity scaling).
 2. Preprocessed image is saved to a temporary NIfTI file (e.g. `input_image.nii.gz`) in a temporary directory.
 3. `ConsoleSimplewareMedical.exe` is launched with:
-   - `--input-file <path_to_input.nii.gz>` — the preprocessed CT (Simpleware opens it as the active document)
-   - `--input-value <tmp_dir>` — directory where the script will write mask files
+   - `--input-file <path_to_input.nii.gz>` - the preprocessed CT (Simpleware opens it as the active document)
+   - `--input-value <tmp_dir>` - directory where the script will write mask files
    - `--run-script SimplewareScript_heart_segmentation.py`
    - `--exit-after-script` and `--no-progress`
 4. The script runs inside Simpleware:
@@ -224,8 +224,8 @@ Within the script, the output directory is passed via `--input-value` and read a
 import simpleware.scripting as sw
 
 app = sw.App.GetInstance()
-output_dir = app.GetInputValue()   # Value from --input-value (output directory)
-doc = sw.App.GetDocument()         # Active document (NIfTI loaded via --input-file)
+output_dir = app.GetInputValue()  # Value from --input-value (output directory)
+doc = sw.App.GetDocument()  # Active document (NIfTI loaded via --input-file)
 ```
 
 ## License
