@@ -98,11 +98,20 @@ installed. The ``dev_cuda12`` and ``dev_cuda13`` extras include it:
    # netgen and Simpleware tetrahedral meshing
    pytest tests/test_contour_mesh_extraction.py -v -k TestExtractLabelTetrahedraExternal --run-gpu --run-simpleware
 
+The aorta tests (``tests/test_aorta_*.py`` and the Tutorial 19 to 21 tests
+in ``tests/test_tutorials.py``) need the ``aorta`` extra. In practice netgen,
+which it includes, is what gates them: the 3D and FSI meshing tests and the
+Tutorial 20 and 21 tests skip without it. The other ``aorta`` requirement,
+``scikit-image``, also arrives through base dependencies such as
+TotalSegmentator, so the ``scikit-image`` skip in the aorta test modules only
+matters for an install without it. The ``dev_cuda12`` and ``dev_cuda13``
+extras include ``aorta``.
+
 Continuous Integration
 ======================
 
 CI runs the fast subset by default. The self-hosted GPU runner installs
-``.[dev_cuda13]`` (which includes the ``netgen`` extra) and invokes pytest with ``--run-all`` (which
+``.[dev_cuda13]`` (which includes the ``netgen`` and ``aorta`` extras) and invokes pytest with ``--run-all`` (which
 enables every ``--run-*`` bucket); tests whose host requirements aren't met
 (e.g. a licensed Simpleware install on a runner without one) runtime-skip
 cleanly via their internal guards.

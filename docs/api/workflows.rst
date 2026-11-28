@@ -46,6 +46,15 @@ Available Workflows
      - Finetune uniGradICON on your own cohort and return the weights
        :class:`RegisterImagesICON` can load.
 
+The blood-flow workflows
+:class:`~monai_physio.aorta.AortaWorkflowSimulateFlow1D`,
+:class:`~monai_physio.aorta.AortaWorkflowSimulateFlow3D` and
+:class:`~monai_physio.aorta.AortaWorkflowSimulateFlowFSI`, and their base
+:class:`~monai_physio.aorta.AortaWorkflowSimulateFlowBase`, are in the
+optional ``monai_physio.aorta`` subpackage, which needs the ``[aorta]`` extra
+(``monai-physio[aorta]``). They are listed with the Warp solvers in
+:doc:`blood_flow`.
+
 The PhysicsNeMo AI-surrogate workflows - :class:`WorkflowTrainPhysicsNeMo`,
 :class:`WorkflowInferPhysicsNeMo`, :class:`WorkflowInferMovement` and
 :class:`WorkflowEvaluateMovement` - have their own section. See

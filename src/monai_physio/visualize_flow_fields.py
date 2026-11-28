@@ -22,7 +22,6 @@ from numpy.typing import NDArray
 
 from .monai_physio_base import MONAIPhysioBase
 
-MMHG = 133.322
 VTK_TET_EDGES = [[0, 1], [1, 2], [0, 2], [0, 3], [1, 3], [2, 3]]
 
 
@@ -34,6 +33,9 @@ class VisualizeFlowFields(MONAIPhysioBase):
     """
 
     SPEED_PERCENTILE = 99.5
+    #: Pa per mmHg.  Defined in core so that core never imports the optional
+    #: ``monai_physio.aorta`` subpackage, which uses it too.
+    MMHG_PA: ClassVar[float] = 133.322387415
 
     FIELDS: ClassVar[dict[str, tuple[str, str]]] = {
         "velocity": ("Speed (m/s)", "turbo"),
@@ -154,7 +156,7 @@ class VisualizeFlowFields(MONAIPhysioBase):
         Speed and wall displacement start at 0; pressure spans its range.
         """
         if field == "pressure":
-            pressure = np.asarray(self.pressure[frames]) / MMHG
+            pressure = np.asarray(self.pressure[frames]) / self.MMHG_PA
             return float(pressure.min()), float(pressure.max())
         if field == "velocity":
             speed = np.linalg.norm(self.velocity[frames], axis=2)
@@ -166,7 +168,7 @@ class VisualizeFlowFields(MONAIPhysioBase):
     def update(self) -> None:
         """Show the current frame on the lumen surface and the slice."""
         velocity = np.array(self.velocity[self.index])
-        corner = np.asarray(self.pressure[self.index]) / MMHG
+        corner = np.asarray(self.pressure[self.index]) / self.MMHG_PA
         if self.displacement is not None:
             moved = np.asarray(self.displacement[self.index])
             self.grid.points = self.nodes + np.concatenate(
@@ -191,6 +193,8 @@ class VisualizeFlowFields(MONAIPhysioBase):
         self.field_actor.mapper.dataset = self.surface
         self.field_actor.mapper.lookup_table.cmap = self.fields[self.field][1]
         self.scalar_bar.SetTitle(self.fields[self.field][0])
+        # Fixed decimals keep the ticks of a narrow pressure range distinct.
+        self.scalar_bar.SetLabelFormat("%.1f" if self.field == "pressure" else "%.2f")
         self.update_slice()
         self.plotter.add_text(
             f"t = {self.times[self.index]:.3f} s\n"

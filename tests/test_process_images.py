@@ -94,6 +94,30 @@ def test_int16_rejects_nonfinite_intensities(value: float) -> None:
         ProcessImages().convert_intensity_image(image, np.int16)
 
 
+def test_index_to_world_matches_itk() -> None:
+    """Index/world conversion honours a rotated direction and round-trips."""
+    image = itk.GetImageFromArray(np.zeros((4, 5, 6), dtype=np.uint8))
+    image.SetSpacing([0.5, 0.7, 1.3])
+    image.SetOrigin([10.0, -20.0, 30.0])
+    angle = 0.4
+    direction = np.array(
+        [
+            [np.cos(angle), -np.sin(angle), 0.0],
+            [np.sin(angle), np.cos(angle), 0.0],
+            [0.0, 0.0, -1.0],
+        ]
+    )
+    image.SetDirection(itk.matrix_from_array(direction))
+    kji = np.array([[0, 0, 0], [3, 4, 5], [1, 2, 3]])
+    world = ProcessImages.index_to_world(image, kji)
+    for row, (k, j, i) in zip(world, kji):
+        expected = image.TransformIndexToPhysicalPoint([int(i), int(j), int(k)])
+        np.testing.assert_allclose(row, list(expected), atol=1e-9)
+    np.testing.assert_allclose(
+        ProcessImages.world_to_index(image, world), kji, atol=1e-9
+    )
+
+
 class TestProcessImages:
     """Test suite for ProcessImages conversions."""
 

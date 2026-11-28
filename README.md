@@ -63,8 +63,12 @@ for CUDA 13, pip, and source installs.
 
 For unstructured tetrahedral meshes with netgen
 (`ProcessVolumetricMesh.extract_label_tetrahedra_netgen`), add the optional `netgen`
-extra, e.g. `"monai-physio[cuda12,netgen]"`. Simpleware-based segmentation and
-meshing need a separately licensed Synopsys Simpleware Medical install.
+extra, e.g. `"monai-physio[cuda12,netgen]"`. The aortic blood-flow
+subpackage `monai_physio.aorta` (Tutorials 19 to 21) needs the `aorta` extra,
+which includes `netgen`, e.g. `"monai-physio[cuda12,aorta]"`; the `dev_cuda12`
+and `dev_cuda13` source-install extras include both. Simpleware-based
+segmentation and meshing need a separately licensed Synopsys Simpleware
+Medical install.
 
 ### Download Tutorials
 

@@ -386,7 +386,9 @@ jobs:
 # (--run-gpu --run-slow --run-simpleware --run-physicsnemo --run-tutorials).
 # That runner installs [dev_cuda13] (nvidia-physicsnemo is a base dependency;
 # the netgen extra is included, so the netgen meshing tests in
-# tests/test_contour_mesh_extraction.py::TestExtractLabelTetrahedraExternal run there).
+# tests/test_contour_mesh_extraction.py::TestExtractLabelTetrahedraExternal run there;
+# the aorta extra is included, so the monai_physio.aorta tests and Tutorials
+# 19-21 run there).
 #
 # To run tutorial tests (manual only, slow):
 #   pytest tests/test_tutorials.py -v --run-tutorials

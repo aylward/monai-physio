@@ -79,6 +79,14 @@ _METRIC_IGNORE_KEYS = [
     "network_weights_file",
     "network_weights_created",
     "network_weights_modified",
+    # Float32 GPU solver diagnostics of Tutorials 20 and 21 vary between runs;
+    # their tests assert convergence (unconverged_coupling_steps == 0) and the
+    # port flow balance (max_net_port_flow_relative) directly.
+    "max_coupling_iterations",
+    "mean_coupling_iterations",
+    "max_coupling_residual",
+    "max_coupling_residual_m",
+    "max_net_port_flow_relative",
 ]
 _REPO_ROOT = Path(__file__).parent.parent
 # Where every tutorial writes under ``MONAI_PHYSIO_RUNNING_AS_TEST``, and where
@@ -1620,3 +1628,128 @@ class TestTutorial18PhysicsInformedMotionInferDukeHeart4DLabelmaps:
             results["screenshots"],
             _baseline_tools(self._class_name, out_dir, test_directories["baselines"]),
         )
+
+
+def _require_netgen() -> None:
+    """Skip unless netgen, which the ``[aorta]`` extra installs, is present.
+
+    Tutorials 20 and 21 mesh the aorta with netgen.  scikit-image, the other
+    ``[aorta]`` requirement, also arrives with the base dependencies, so netgen
+    is what an install without ``[aorta]`` lacks.
+    """
+    if importlib.util.find_spec("netgen") is None:
+        pytest.skip('netgen not installed; install "monai-physio[aorta]"')
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.tutorial
+@pytest.mark.slow
+class TestTutorial19SimulateAortaFlow1DChest3DCT:
+    """End-to-end test for tutorial_19_simulate_aorta_flow_1d_chest_3d_ct.py.
+
+    Requires the ``[aorta]`` extra (``monai-physio[aorta]``).
+    """
+
+    _class_name = "tutorial_19_simulate_aorta_flow_1d_chest_3d_ct"
+
+    def test_run(self, test_directories: dict[str, Path]) -> None:
+        pytest.importorskip("skimage")
+        tutorial_13_dir = (
+            _TUTORIAL_OUTPUT / "tutorial_13_combine_heart_and_lung_motion_chest_3d_ct"
+        )
+        for pattern in ("chest_ct_merged_labelmap.mha", "combined_labelmap_*.mha"):
+            _require_files(
+                tutorial_13_dir,
+                pattern,
+                "Run tutorial_13_combine_heart_and_lung_motion_chest_3d_ct.py first.",
+            )
+
+        results = _run_tutorial_script(
+            "tutorial_19_simulate_aorta_flow_1d_chest_3d_ct.py"
+        )
+        for path in results["files"].values():
+            assert Path(path).exists(), f"{path} should exist"
+        summary = results["summary"]
+        assert summary["root_diastolic_mmhg"] < summary["root_systolic_mmhg"]
+
+        out_dir = _TUTORIAL_OUTPUT / self._class_name
+        tt = _baseline_tools(self._class_name, out_dir, test_directories["baselines"])
+        _compare_screenshots(results["screenshots"], tt)
+        _compare_metrics(tt, ["summary.json"])
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.tutorial
+@pytest.mark.slow
+class TestTutorial20SimulateAortaFlow3DChest3DCT:
+    """End-to-end test for tutorial_20_simulate_aorta_flow_3d_chest_3d_ct.py.
+
+    Requires the ``[aorta]`` extra (``monai-physio[aorta]``) for netgen.
+    """
+
+    _class_name = "tutorial_20_simulate_aorta_flow_3d_chest_3d_ct"
+
+    def test_run(self, test_directories: dict[str, Path]) -> None:
+        _require_netgen()
+        tutorial_13_dir = (
+            _TUTORIAL_OUTPUT / "tutorial_13_combine_heart_and_lung_motion_chest_3d_ct"
+        )
+        for pattern in ("chest_ct_merged_labelmap.mha", "combined_labelmap_*.mha"):
+            _require_files(
+                tutorial_13_dir,
+                pattern,
+                "Run tutorial_13_combine_heart_and_lung_motion_chest_3d_ct.py first.",
+            )
+
+        results = _run_tutorial_script(
+            "tutorial_20_simulate_aorta_flow_3d_chest_3d_ct.py"
+        )
+        for path in results["files"].values():
+            assert Path(path).exists(), f"{path} should exist"
+        summary = results["summary"]
+        assert summary["root_diastolic_mmhg"] < summary["root_systolic_mmhg"]
+        assert summary["max_net_port_flow_relative"] < 1e-3
+
+        out_dir = _TUTORIAL_OUTPUT / self._class_name
+        tt = _baseline_tools(self._class_name, out_dir, test_directories["baselines"])
+        _compare_screenshots(results["screenshots"], tt)
+        _compare_metrics(tt, ["summary.json"])
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.tutorial
+@pytest.mark.slow
+class TestTutorial21SimulateAortaFlowFSIChest3DCT:
+    """End-to-end test for tutorial_21_simulate_aorta_flow_fsi_chest_3d_ct.py.
+
+    Requires the ``[aorta]`` extra (``monai-physio[aorta]``) for netgen.
+    """
+
+    _class_name = "tutorial_21_simulate_aorta_flow_fsi_chest_3d_ct"
+
+    def test_run(self, test_directories: dict[str, Path]) -> None:
+        _require_netgen()
+        tutorial_13_dir = (
+            _TUTORIAL_OUTPUT / "tutorial_13_combine_heart_and_lung_motion_chest_3d_ct"
+        )
+        for pattern in ("chest_ct_merged_labelmap.mha", "combined_labelmap_*.mha"):
+            _require_files(
+                tutorial_13_dir,
+                pattern,
+                "Run tutorial_13_combine_heart_and_lung_motion_chest_3d_ct.py first.",
+            )
+
+        results = _run_tutorial_script(
+            "tutorial_21_simulate_aorta_flow_fsi_chest_3d_ct.py"
+        )
+        for path in results["files"].values():
+            assert Path(path).exists(), f"{path} should exist"
+        summary = results["summary"]
+        assert summary["root_diastolic_mmhg"] < summary["root_systolic_mmhg"]
+        assert summary["unconverged_coupling_steps"] == 0
+        assert summary["max_net_port_flow_relative"] < 1e-2
+
+        out_dir = _TUTORIAL_OUTPUT / self._class_name
+        tt = _baseline_tools(self._class_name, out_dir, test_directories["baselines"])
+        _compare_screenshots(results["screenshots"], tt)
+        _compare_metrics(tt, ["summary.json"])

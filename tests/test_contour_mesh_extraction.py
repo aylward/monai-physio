@@ -1815,5 +1815,43 @@ def test_tutorial_4_frame_writes_every_output(tmp_path: Path) -> None:
     assert all(0.0 <= value < 1.0 for value in displacements)
 
 
+def test_tetrahedra_arrays_and_boundary_faces() -> None:
+    """Two tetrahedra sharing a face: six outward boundary faces, volume 1/2.
+
+    The second tetrahedron is given negatively oriented and comes back
+    positive; the unit corner tetrahedron and its neighbour enclose 1/6 and
+    2/6.
+    """
+    points = np.array(
+        [[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]], dtype=np.float64
+    )
+    grid = pv.UnstructuredGrid(
+        {pv.CellType.TETRA: np.array([[0, 1, 2, 3], [2, 1, 3, 4]])}, points
+    )
+    array_points, tetrahedra = ProcessVolumetricMesh.tetrahedra_arrays(grid)
+    np.testing.assert_array_equal(tetrahedra, [[0, 1, 2, 3], [1, 2, 3, 4]])
+    corners = array_points[tetrahedra]
+    assert np.all(np.linalg.det(corners[:, 1:] - corners[:, :1]) > 0)
+
+    faces = ProcessVolumetricMesh.boundary_faces(tetrahedra)
+    assert len(faces) == 6
+    assert {1, 2, 3} not in [set(face) for face in faces.tolist()]
+    assert ProcessVolumetricMesh.enclosed_volume(points, faces) == pytest.approx(0.5)
+
+
+def test_shared_faces_match_coordinates_not_indices() -> None:
+    """Triangles are matched by vertex coordinates across differently numbered meshes."""
+    points = np.array([[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    faces = ProcessVolumetricMesh.boundary_faces(np.array([[0, 1, 2, 3]]))
+    order = np.array([3, 1, 0, 2])
+    other_points = points[order]
+    renumber = np.argsort(order)
+    other_faces = renumber[faces[:2]][:, ::-1]
+    shared = ProcessVolumetricMesh.shared_faces(
+        points, faces, [(other_points, other_faces)]
+    )
+    np.testing.assert_array_equal(shared, [True, True, False, False])
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

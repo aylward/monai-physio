@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 import pyvista as pv
 
-from monai_physio.visualize_flow_fields import MMHG, VisualizeFlowFields
+from monai_physio.visualize_flow_fields import VisualizeFlowFields
 from monai_physio.warp_navier_stokes import (
     WarpNavierStokes,
     Windkessel,
@@ -144,7 +144,7 @@ def test_viewer_controls(tmp_path: Path) -> None:
         assert viewer.index == len(viewer.times) - 1
         movie = viewer.record_movie(tmp_path / "movie.mp4", float(viewer.times[-2]))
         assert movie["frames"] == 2 and (tmp_path / "movie.mp4").stat().st_size
-        shown = np.asarray(viewer.pressure[-2:]) / MMHG
+        shown = np.asarray(viewer.pressure[-2:]) / VisualizeFlowFields.MMHG_PA
         assert movie["color_limits"] == pytest.approx((shown.min(), shown.max()))
     finally:
         viewer.plotter.close()

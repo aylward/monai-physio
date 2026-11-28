@@ -1,0 +1,30 @@
+{
+  "heart_rate_bpm": 60.0,
+  "input_systolic_mmhg": 112.0,
+  "input_diastolic_mmhg": 78.0,
+  "input_mean_mmhg": 89.33333333333333,
+  "outlet_total_resistance_pa_s_m3": 387127524.0394621,
+  "outlet_total_compliance_m3_pa": 7.927575233431196e-09,
+  "root_systolic_mmhg": 110.05961642913591,
+  "root_diastolic_mmhg": 78.52402106751529,
+  "root_mean_mmhg": 91.53183540190666,
+  "root_pulse_pressure_mmhg": 31.535595361620622,
+  "root_to_distal_max_mmhg": 7.558798355727106,
+  "root_to_distal_min_mmhg": -7.299657384473264,
+  "mean_pressure_change_mmhg": 0.02547852421355401,
+  "peak_inflow_ml_s": 132.05621177676932,
+  "stroke_volume_ml": 31.499999999999993,
+  "cardiac_output_l_min": 1.8899999999999995,
+  "outlet_flow_shares": {
+    "distal": 0.7368421052631579,
+    "bct": 0.17894736842105266,
+    "lsa": 0.08421052631578949
+  },
+  "outlet_stroke_volume_ml": {
+    "distal": 23.210526315789465,
+    "bct": 5.636842105263158,
+    "lsa": 2.6526315789473682
+  },
+  "peak_velocity_m_s": 0.6570083361096007,
+  "peak_reynolds": 2390.8537339403047
+}

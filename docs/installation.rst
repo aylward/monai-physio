@@ -42,6 +42,14 @@ Optional Python extras:
   macOS; there is none for Linux aarch64. Add it to any install, for example
   ``uv pip install "monai-physio[cuda12,netgen]" ...``. The ``dev_cuda12`` and
   ``dev_cuda13`` source-install extras include it.
+* ``[aorta]`` - the aortic blood-flow subpackage ``monai_physio.aorta``
+  (Tutorials 19 to 21): ``scikit-image`` for the aorta centerline plus the
+  ``[netgen]`` extra for the lumen and wall meshes. ``import monai_physio``
+  does not import the subpackage; import its classes from
+  ``monai_physio.aorta``. Add it to any install, for example
+  ``uv pip install "monai-physio[cuda12,aorta]" ...``. The ``dev_cuda12`` and
+  ``dev_cuda13`` source-install extras include it. It cannot install on Linux
+  aarch64, where ``netgen-mesher`` publishes no wheel.
 
 Installing
 ==========
@@ -184,7 +192,8 @@ Development Tools
 ==================
 
 The ``dev`` extra - included in ``dev_cuda12`` and ``dev_cuda13``, which also
-pull in the ``netgen`` extra so the netgen meshing tests can run - provides:
+pull in the ``netgen`` and ``aorta`` extras so the netgen meshing and aorta
+tests can run - provides:
 
 * **ruff** (linting and formatting)
 * **mypy** (type checking)

@@ -225,6 +225,24 @@ second run is cheap and later tutorials pick up earlier results automatically.
        <p>Score the physics-informed surrogate against its ablation and export the motion colored by von Mises stress.</p>
        <span class="mphysio-card__meta">Tutorials 16 and 17 output</span>
      </a>
+     <a class="mphysio-card" href="#tutorial-19-1d-rigid-wall-blood-flow-in-the-tutorial-13-aorta">
+       <span class="mphysio-card__number">19</span>
+       <h2>1D Rigid-Wall Blood Flow in the Tutorial 13 Aorta</h2>
+       <p>Drive the aorta with the heart's own ejection and read out pressure, flow split and velocity along its centerline.</p>
+       <span class="mphysio-card__meta">Tutorial 13 output</span>
+     </a>
+     <a class="mphysio-card" href="#tutorial-20-3d-rigid-wall-blood-flow-in-the-tutorial-13-aorta">
+       <span class="mphysio-card__number">20</span>
+       <h2>3D Rigid-Wall Blood Flow in the Tutorial 13 Aorta</h2>
+       <p>Solve the full 3D velocity and pressure fields of the same aorta on the GPU and compare them with the 1D model.</p>
+       <span class="mphysio-card__meta">Tutorial 13 output</span>
+     </a>
+     <a class="mphysio-card" href="#tutorial-21-3d-blood-flow-with-a-moving-aortic-wall-in-the-tutorial-13-aorta">
+       <span class="mphysio-card__number">21</span>
+       <h2>3D Blood Flow With a Moving Aortic Wall in the Tutorial 13 Aorta</h2>
+       <p>Couple the 3D flow to an elastic aortic wall and measure its bulge, distensibility and pulse-wave speed.</p>
+       <span class="mphysio-card__meta">Tutorial 13 output</span>
+     </a>
    </section>
 
 Recommended Run Order
@@ -274,6 +292,12 @@ or physics-informed cardiac motion and stress end-to-end on their own.
     Tutorial 18 accepts the downloaded checkpoints in place of Tutorial 17's,
     provided they were trained on the shape model Tutorial 16 built; it checks,
     as Duke Tutorial 14 does for a downloaded Tutorial 9 checkpoint.
+17. **Tutorial 19** - after Tutorial 13, whose aorta labelmap and warped
+    labelmap series it reads.
+18. **Tutorial 20** - after Tutorial 13, as Tutorial 19; it compares its
+    summary with Tutorial 19's when that has run.
+19. **Tutorial 21** - after Tutorial 13, as Tutorial 19; it compares its
+    summary with Tutorials 19 and 20 when they have run.
 
 Tutorial 00 (Lung Demo): Predict Lung Motion From a Single Chest CT
 ====================================================================
@@ -1973,6 +1997,240 @@ Adapt to your data
    Point ``case_id`` at a different held-out subject to score that one
    instead; everything it reads comes from Tutorials 16 and 17, so no other
    change is needed.
+
+
+Tutorial 19: 1D Rigid-Wall Blood Flow in the Tutorial 13 Aorta
+===============================================================
+
+Script
+   ``tutorials/tutorial_19_simulate_aorta_flow_1d_chest_3d_ct.py``
+
+Workflow
+   :class:`~monai_physio.aorta.AortaWorkflowSimulateFlow1D`, which prepares
+   the aorta with :class:`~monai_physio.aorta.AortaProcessGeometry`, with
+   parameters from :class:`~monai_physio.aorta.AortaFlowPhysiology`, all
+   imported from ``monai_physio.aorta``.
+
+Dataset
+   Tutorial 13 output: ``chest_ct_merged_labelmap.mha`` (aorta label 6 and the
+   BCT, left common carotid and left subclavian labels 109, 112 and 123) and
+   the hundred ``combined_labelmap_<iii>.mha`` frames, whose left ventricle
+   (label 151) gives the inflow. When run as a test, the heart of the
+   test-mode Tutorial 13 output (a 3 mm copy of the scan and a briefly
+   trained network) barely moves, so the reference curve
+   :meth:`~monai_physio.aorta.AortaFlowPhysiology.reference_lv_volumes_ml`
+   (72 to 40.5 mL, three beats) replaces its LV volume; the aorta is still
+   the test-mode one.
+
+Requirements
+   ``monai-physio[aorta]`` and a CUDA GPU. About half a minute, most of it
+   reading the frames and preparing the aorta.
+
+What it does
+   Takes the patient's heart rate and systolic and diastolic blood pressure
+   as user inputs (example values 60 bpm and 112/78 mmHg; replace them with
+   your patient's, for example a cuff measurement). Measures the
+   left-ventricle volume of every frame and takes its loss during ejection as
+   the aortic inflow, retimed to the heart rate. It then cuts the aorta
+   normal to its centerline, finds the three arch branches, and evaluates a
+   rigid-tube model along the centerline: the flow drops at each branch by
+   that outlet's assumed share, the outlets end in Windkessels calibrated so
+   that this inflow reproduces the input systolic and diastolic pressure,
+   and the pressure is the inertial and Poiseuille drop to the distal outlet. It
+   prints the input and the simulated root pressures; expect them within a
+   few mmHg, and section-mean velocities around 0.5 m/s. The flow split is
+   assumed rather than computed, and the wall does not move.
+
+   Tutorial 13's heart is not a typical resting adult's: its LV labelmaps
+   give an ejection fraction of about 44%, a stroke volume of about 32 mL
+   and 1.9 L/min at 60 bpm, under two fifths of a resting adult's output
+   (the experiments' USD LV mesh of the same heart gives 36 mL). Ejection is
+   long, about 0.5 s, so the peak inflow (about 140 mL/s) and the speeds
+   (about 0.55 m/s) are below adult values. Adult pressures with this flow
+   need a total outlet resistance of about 3.8e8 Pa s/m^3, more than twice
+   a resting adult's, and its proximal 6% then carries most of the pulse
+   (about 24 of 33 mmHg), so the root pressure follows the shape of the
+   inflow. Tutorials 20 and 21 share these properties.
+
+Run
+   .. code-block:: bash
+
+      python tutorials/tutorial_19_simulate_aorta_flow_1d_chest_3d_ct.py
+
+Outputs
+   Under ``tutorials/output/tutorial_19_simulate_aorta_flow_1d_chest_3d_ct/``:
+   ``centerline.vtp`` (last-beat pressure and velocity per section),
+   ``lumen_surface.vtp``, ``fields.npz`` (every time x section field),
+   ``summary.json``, ``inflow.json`` and ``pressure_flow.png``.
+
+Adapt to your data
+   Pass any labelmap with an aorta label to
+   :meth:`~monai_physio.aorta.AortaWorkflowSimulateFlow1D.process`; the
+   branch labels are optional, and names outside ``bct``, ``lcca`` and
+   ``lsa`` need their own entry in
+   :attr:`~monai_physio.aorta.AortaFlowPhysiology.flow_fractions`. A
+   different cardiac series gives its own inflow through
+   :meth:`~monai_physio.aorta.AortaFlowPhysiology.lv_volumes_ml` and
+   :meth:`~monai_physio.aorta.AortaFlowPhysiology.lv_inflow`. Set
+   ``systolic_pressure_mmhg``, ``diastolic_pressure_mmhg`` and
+   ``heart_rate_bpm`` of :class:`~monai_physio.aorta.AortaFlowPhysiology` to
+   your patient's measurements.
+
+
+Tutorial 20: 3D Rigid-Wall Blood Flow in the Tutorial 13 Aorta
+===============================================================
+
+Script
+   ``tutorials/tutorial_20_simulate_aorta_flow_3d_chest_3d_ct.py``
+
+Workflow
+   :class:`~monai_physio.aorta.AortaWorkflowSimulateFlow3D`, which prepares
+   and meshes the aorta with :class:`~monai_physio.aorta.AortaProcessGeometry`
+   and
+   solves the flow with :class:`~monai_physio.WarpNavierStokes`, with
+   parameters from :class:`~monai_physio.aorta.AortaFlowPhysiology`;
+   :class:`~monai_physio.VisualizeFlowFields` renders the result.
+
+Dataset
+   Tutorial 13 output, as Tutorial 19: ``chest_ct_merged_labelmap.mha`` and
+   the hundred ``combined_labelmap_<iii>.mha`` frames, with Tutorial 19's
+   reference LV volume curve when run as a test. Tutorial 19's
+   ``summary.json`` is compared when present.
+
+Requirements
+   ``monai-physio[aorta]``, a CUDA GPU and NVIDIA cuDSS (the
+   ``nvidia-cudss-cu13`` or ``-cu12`` wheel, or ``CUDSS_LIBRARY`` naming the
+   library). About two minutes.
+
+What it does
+   Uses the patient inputs, inflow and calibrated outlets of Tutorial 19,
+   meshes the lumen alone with netgen (2 mm tetrahedra, refined at narrow
+   outlets) and solves incompressible Navier-Stokes flow with quadratic
+   velocity and linear pressure on the GPU for three beats, with a blunt
+   root profile and a Windkessel at every outlet. The flow split is
+   computed rather than imposed. It saves the last beat's fields, renders
+   pressure and speed at peak inflow with a coronal slice and velocity
+   arrows, records the beat's pressure as a movie, and prints the input and
+   simulated root pressures and the differences from Tutorial 19's root
+   pressures and flow shares. Expect them within a few mmHg and a fraction
+   of a percentage point, and peak speeds in the arch of about 0.5-1 m/s.
+   The wall does not move, and time and mesh convergence are not
+   established.
+
+Run
+   .. code-block:: bash
+
+      python tutorials/tutorial_20_simulate_aorta_flow_3d_chest_3d_ct.py
+
+Outputs
+   Under ``tutorials/output/tutorial_20_simulate_aorta_flow_3d_chest_3d_ct/``:
+   a :class:`~monai_physio.VisualizeFlowFields` results folder (``mesh.npz``,
+   ``time.npz``, ``velocity_m_s.npy``, ``pressure_pa.npy``), ``steps.npz``,
+   ``run.json``, ``summary.json``, ``inflow.json``, ``comparison_1d.json``,
+   ``pressure_flow.png``, ``peak_systole_pressure.png``,
+   ``peak_systole_speed.png`` and ``pressure_last_beat.mp4``.
+
+Adapt to your data
+   As for Tutorial 19: any labelmap with an aorta label, optional branch
+   labels, an inflow from
+   :meth:`~monai_physio.aorta.AortaFlowPhysiology.lv_inflow` and your patient's
+   blood pressure and heart rate. ``element_size_mm``
+   and ``dt_s`` set the mesh and time resolution.
+
+
+Tutorial 21: 3D Blood Flow With a Moving Aortic Wall in the Tutorial 13 Aorta
+=============================================================================
+
+Script
+   ``tutorials/tutorial_21_simulate_aorta_flow_fsi_chest_3d_ct.py``
+
+Workflow
+   :class:`~monai_physio.aorta.AortaWorkflowSimulateFlowFSI`, which prepares
+   and meshes the aorta and its wall with
+   :class:`~monai_physio.aorta.AortaProcessGeometry` and couples
+   :class:`~monai_physio.WarpNavierStokes` to a
+   :class:`~monai_physio.WarpHyperelasticWall` with
+   :class:`~monai_physio.WarpFluidStructure`, with parameters from
+   :class:`~monai_physio.aorta.AortaFlowPhysiology`;
+   :class:`~monai_physio.VisualizeFlowFields` renders the result.
+
+Dataset
+   Tutorial 13 output, as Tutorial 19, with its reference LV volume curve
+   when run as a test. Tutorial 19's and 20's
+   ``summary.json`` are compared when present.
+
+Requirements
+   ``monai-physio[aorta]``, a CUDA GPU and NVIDIA cuDSS, as Tutorial 20.
+   About 45-60 minutes.
+
+What it does
+   Uses the patient inputs and inflow of Tutorials 19 and 20, adds a wall
+   shell around the lumen on a 1.25 mm grid and fills lumen and wall together
+   with netgen, so that they share every interface triangle. The wall is a
+   Neo-Hookean solid (1.5 mm and 1 MPa by default, meshed 3.75 mm thick at
+   0.4 MPa because netgen needs three grid spacings across it), prestressed
+   so that the imaged aorta is its shape at the calibrated starting
+   pressure, clamped around the outlets and tethered on its outer surface.
+   The workflow measures the wall's own compliance with a static wall solve
+   (prestressed at the diastolic and loaded with the systolic input) and
+   calibrates the outlets to the input pressures with that compliance in
+   front of them. It then couples blood and wall every 2.5 ms step for
+   three beats, saves the last beat's fields and wall displacement,
+   renders pressure, speed and wall displacement at peak inflow, records
+   the wall displacement over the beat as a movie, and prints the root
+   pressures, the wall's displacement, strain, distensibility and
+   Bramwell-Hill pulse-wave speed, and the differences from Tutorials 19
+   and 20. Expect the diastolic root pressure near the input and the
+   systolic a few mmHg below it (about 3 mmHg in a reference run). Most
+   of that is the lumen being more compliant in the flow than in the static
+   solve its compliance is measured with (the summary's
+   ``lumen_compliance_m3_pa``, 2.47e-9 m^3/Pa in the reference run, against
+   the static 2.17e-9 m^3/Pa); the run also starts at the outlet capacitor
+   pressure (89.5 mmHg) rather than the periodic root pressure of the
+   lumped model at that phase (92.1 mmHg). The mean pressure rises by
+   about 0.5 mmHg per beat, from the lumped model's own transient and the
+   three slightly unequal beats of the inflow (31.67, 31.96 and 31.89 mL),
+   not from numerical leakage: each beat's volume balance closes within
+   about 0.01 mL. With the wall in front of the outlets the waveform is
+   rounder, so the same systolic and diastolic pressures come with a higher
+   mean than in Tutorials 19 and 20 (about 94 against 92 mmHg). Expect wall displacements of about half a millimetre and a
+   pulse-wave speed of a few metres per second. Keeping modulus times
+   thickness is a thin-wall approximation: the surrogate wall is about
+   20-35% more compliant than the 1.5 mm, 1 MPa wall it stands for, and the
+   reported wall motion, strain, distensibility and wave speed are the
+   surrogate's. The wall is massless and uniform, and time and mesh
+   convergence are not established.
+
+   Blood and wall are iterated to agreement in every step within the
+   coupling tolerances of
+   :attr:`~monai_physio.aorta.AortaWorkflowSimulateFlowFSI.COUPLING`. Its
+   absolute tolerance, 10 nm, is looser than the FSI experiment's 1 nm: the
+   interface moves only micrometres per step, so the absolute term decides
+   convergence in nearly every step, and on a 1 mm netgen mesh of this
+   aorta the float32 blood solve held the residual near 5-10 nm. With
+   10 nm the inflow minus the outflow and the lumen's volume change stays
+   within about 0.4% of the peak inflow.
+
+Run
+   .. code-block:: bash
+
+      python tutorials/tutorial_21_simulate_aorta_flow_fsi_chest_3d_ct.py
+
+Outputs
+   Under ``tutorials/output/tutorial_21_simulate_aorta_flow_fsi_chest_3d_ct/``:
+   a :class:`~monai_physio.VisualizeFlowFields` results folder (``mesh.npz``,
+   ``time.npz``, ``velocity_m_s.npy``, ``pressure_pa.npy``,
+   ``displacement_m.npy``), ``steps.npz``, ``run.json``, ``summary.json``,
+   ``inflow.json``, ``comparison.json``, ``pressure_flow.png``,
+   ``peak_systole_pressure.png``, ``peak_systole_speed.png``,
+   ``peak_systole_displacement.png`` and ``displacement_last_beat.mp4``.
+
+Adapt to your data
+   As for Tutorial 19, plus the wall fields of
+   :class:`~monai_physio.aorta.AortaFlowPhysiology` (``young_modulus_pa``,
+   ``poisson_ratio``, ``wall_thickness_mm``, ``tether_stiffness_pa_m``).
+   ``spacing_mm`` sets the mesh size and so the run time, which grows about
+   as its inverse cube.
 
 
 Where to Go Next

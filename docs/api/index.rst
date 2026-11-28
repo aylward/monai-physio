@@ -77,6 +77,14 @@ By Category
    * :class:`~monai_physio.WarpHyperelasticWall` - Prestressed Neo-Hookean vessel wall
    * :class:`~monai_physio.WarpFluidStructure` - Two-way fluid-structure coupling
    * :class:`~monai_physio.VisualizeFlowFields` - Flow-field viewer and movie export
+   * ``monai_physio.aorta`` (needs the ``[aorta]`` extra):
+     :class:`~monai_physio.aorta.AortaProcessGeometry`,
+     :class:`~monai_physio.aorta.AortaFlowPhysiology`,
+     :class:`~monai_physio.aorta.AortaWorkflowSimulateFlowBase`,
+     :class:`~monai_physio.aorta.AortaWorkflowSimulateFlow1D`,
+     :class:`~monai_physio.aorta.AortaWorkflowSimulateFlow3D` and
+     :class:`~monai_physio.aorta.AortaWorkflowSimulateFlowFSI` - aortic blood
+     flow from an aorta labelmap
 
 **USD Tools**
    * :mod:`~monai_physio.process_usd` - USD file utilities

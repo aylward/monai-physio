@@ -40,6 +40,33 @@ class ProcessImages(MONAIPhysioBase):
         """
         super().__init__(class_name=self.__class__.__name__, log_level=log_level)
 
+    @staticmethod
+    def index_to_world(image: itk.Image, kji: np.ndarray) -> np.ndarray:
+        """Return the world positions of NumPy array indices of *image*.
+
+        *kji* rows are ``(k, j, i)`` indices of ``itk.GetArrayFromImage``,
+        reversed relative to the image's ``(i, j, k)`` index; they may be
+        fractional.  The position is ``origin + D @ (ijk * spacing)``.
+        """
+        origin = np.asarray(image.GetOrigin(), dtype=np.float64)
+        spacing = np.asarray(image.GetSpacing(), dtype=np.float64)
+        direction = itk.array_from_matrix(image.GetDirection()).astype(np.float64)
+        ijk = np.asarray(kji, dtype=np.float64)[..., ::-1]
+        return np.asarray(origin + (ijk * spacing) @ direction.T)
+
+    @staticmethod
+    def world_to_index(image: itk.Image, points: np.ndarray) -> np.ndarray:
+        """Return the fractional ``(k, j, i)`` array indices of world points.
+
+        The inverse of :meth:`index_to_world`.
+        """
+        origin = np.asarray(image.GetOrigin(), dtype=np.float64)
+        spacing = np.asarray(image.GetSpacing(), dtype=np.float64)
+        direction = itk.array_from_matrix(image.GetDirection()).astype(np.float64)
+        offset = np.asarray(points, dtype=np.float64) - origin
+        ijk = offset @ np.linalg.inv(direction).T / spacing
+        return np.asarray(ijk[..., ::-1])
+
     def transform_image(
         self,
         image: itk.image,

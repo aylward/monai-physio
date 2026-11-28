@@ -1069,3 +1069,112 @@ class ProcessVolumetricMesh(MONAIPhysioBase):
         repaired = tetrahedra.copy()
         repaired.points = points
         return repaired
+
+    # ------------------------------------------------------------------
+    # Tetrahedra as arrays
+    # ------------------------------------------------------------------
+    #: Vertex triples of the four faces of a positively oriented tetrahedron,
+    #: each wound so that its normal points out of the tetrahedron.
+    TETRAHEDRON_FACES: ClassVar[tuple[list[int], ...]] = (
+        [1, 2, 3],
+        [0, 3, 2],
+        [0, 1, 3],
+        [0, 2, 1],
+    )
+
+    @staticmethod
+    def tetrahedra_arrays(mesh: pv.UnstructuredGrid) -> tuple[np.ndarray, np.ndarray]:
+        """Return the points and positively oriented tetrahedra of a TETRA grid.
+
+        Args:
+            mesh: Grid of TETRA cells only.
+
+        Returns:
+            (n, 3) float64 points and (m, 4) int64 tetrahedra, each reordered
+            where needed so that its signed volume is positive.
+        """
+        points = np.asarray(mesh.points, dtype=np.float64)
+        tetrahedra = np.array(mesh.cells.reshape(-1, 5)[:, 1:], dtype=np.int64)
+        corners = points[tetrahedra]
+        negative = np.linalg.det(corners[:, 1:] - corners[:, :1]) < 0
+        tetrahedra[negative] = tetrahedra[negative][:, [1, 0, 2, 3]]
+        return points, tetrahedra
+
+    @staticmethod
+    def boundary_faces(tetrahedra: np.ndarray) -> np.ndarray:
+        """Return the outward-wound boundary triangles of positive tetrahedra.
+
+        A boundary triangle is a face that belongs to exactly one tetrahedron.
+        """
+        faces = np.concatenate(
+            [tetrahedra[:, f] for f in ProcessVolumetricMesh.TETRAHEDRON_FACES]
+        )
+        _, inverse, counts = np.unique(
+            np.sort(faces, axis=1), axis=0, return_inverse=True, return_counts=True
+        )
+        return np.asarray(faces[counts[inverse.ravel()] == 1])
+
+    @staticmethod
+    def common_point_ids(*point_sets: np.ndarray) -> list[np.ndarray]:
+        """Number the points of all sets so that equal coordinates share an id.
+
+        Conforming meshes share interface points with identical coordinates,
+        so this identifies them across meshes.
+
+        Returns:
+            One id array per point set.
+
+        Raises:
+            ValueError: If there are too many distinct points for
+                :meth:`face_keys`.
+        """
+        _, ids = np.unique(np.concatenate(point_sets), axis=0, return_inverse=True)
+        ids = ids.ravel().astype(np.int64)
+        if len(ids) and ids.max() >= 2**21:
+            raise ValueError("Too many points to key triangles by vertex ids")
+        return np.split(ids, np.cumsum([len(p) for p in point_sets])[:-1])
+
+    @staticmethod
+    def face_keys(point_ids: np.ndarray, faces: np.ndarray) -> np.ndarray:
+        """Return one integer per triangle that ignores its vertex order.
+
+        Args:
+            point_ids: Id of every point, below 2**21, for example from
+                :meth:`common_point_ids`.
+            faces: Triangles as point indices.
+        """
+        ids = np.sort(point_ids[faces], axis=1)
+        return np.asarray((ids[:, 0] << 42) | (ids[:, 1] << 21) | ids[:, 2])
+
+    @staticmethod
+    def shared_faces(
+        points: np.ndarray,
+        faces: np.ndarray,
+        others: Sequence[tuple[np.ndarray, np.ndarray]],
+    ) -> np.ndarray:
+        """Return which triangles of a mesh some other mesh holds exactly.
+
+        Args:
+            points: The mesh's points.
+            faces: Its triangles.
+            others: (points, triangles) of the other meshes.
+
+        Returns:
+            True for each triangle whose three vertex coordinates are those
+            of a triangle in *others*.
+        """
+        ids = ProcessVolumetricMesh.common_point_ids(points, *[p for p, _ in others])
+        keys = ProcessVolumetricMesh.face_keys(ids[0], faces)
+        other_keys = [
+            ProcessVolumetricMesh.face_keys(i, f) for i, (_, f) in zip(ids[1:], others)
+        ]
+        return np.isin(keys, np.concatenate(other_keys))
+
+    @staticmethod
+    def enclosed_volume(points: np.ndarray, faces: np.ndarray) -> float:
+        """Return the volume enclosed by a closed, outward-wound triangle surface."""
+        corners = np.asarray(points)[np.asarray(faces)]
+        return float(
+            np.einsum("ij,ij->", corners[:, 0], np.cross(corners[:, 1], corners[:, 2]))
+            / 6.0
+        )

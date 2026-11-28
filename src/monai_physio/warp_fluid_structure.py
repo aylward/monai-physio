@@ -572,10 +572,10 @@ class WarpFluidStructure(MONAIPhysioBase):
             The last fluid step result plus coupling iterations (fluid and
             wall solves; ``max_iterations + 1`` for a capped step, whose
             re-solve can still meet the criterion), whether the interface
-            converged, the relative residual of the kept iterate, the summed
-            GMRES and wall Newton iterations, the wall tangent
-            refactorizations, the interface displacement extremes in m and
-            the rate of change of the fluid volume in m^3/s.
+            converged, the relative and the RMS (m) residual of the kept
+            iterate, the summed GMRES and wall Newton iterations, the wall
+            tangent refactorizations, the interface displacement extremes in
+            m, and the fluid volume in m^3 and its rate of change in m^3/s.
         """
         fluid, wall, dt = self.fluid, self.wall, self.fluid.dt
         current = wall.displacement()[self.interface]
@@ -646,11 +646,13 @@ class WarpFluidStructure(MONAIPhysioBase):
             "coupling_iterations": iteration,
             "converged": bool(converged),
             "coupling_residual": relative,
+            "coupling_residual_m": float(size),
             "gmres_iterations": gmres,
             "wall_iterations": newton,
             "wall_tangent_updates": updates,
             "max_displacement_m": float(magnitude.max()),
             "mean_displacement_m": float(magnitude.mean()),
+            "volume_m3": volume,
             "volume_rate_m3_s": volume_rate,
         }
 

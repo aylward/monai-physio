@@ -116,3 +116,33 @@ To combine two motions, restrict each with
 organ mask and compose them, as tutorial 13 does for heart and lung motion.
 
 **Automated conversion:** None needed; no replacement is one-to-one.
+
+## `monai_physio.visualize_flow_fields.MMHG` - replaced by `VisualizeFlowFields.MMHG_PA`
+
+**Change:** the module-level constant `MMHG` (133.322) is removed. The
+conversion is now the class constant `VisualizeFlowFields.MMHG_PA`
+(133.322387415, Pa per mmHg), which `monai_physio.aorta.AortaFlowPhysiology`
+shares as `AortaFlowPhysiology.MMHG_PA`.
+
+**Why:** MONAI Physio keeps constants on the classes that use them, and the
+new `monai_physio.aorta` subpackage needed the same conversion without core
+importing the optional subpackage. One exact value now serves both, instead of
+a rounded module constant beside a class constant.
+
+**Before**
+
+```python
+from monai_physio.visualize_flow_fields import MMHG
+
+pressure_mmhg = pressure_pa / MMHG
+```
+
+**After**
+
+```python
+from monai_physio.visualize_flow_fields import VisualizeFlowFields
+
+pressure_mmhg = pressure_pa / VisualizeFlowFields.MMHG_PA
+```
+
+**Automated conversion:** None needed; replace the import and the name.

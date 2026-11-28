@@ -228,6 +228,14 @@ netgen = [
   # needs Mesh.RestrictLocalH.
   "netgen-mesher>=6.2.2608",
 ]
+# Aortic blood-flow simulation (the monai_physio.aorta subpackage, Tutorials
+# 19-21). scikit-image traces the aorta centerline
+# (skimage.graph.MCP_Geometric in AortaProcessGeometry); the netgen extra is
+# included because the aorta's lumen and wall are meshed with netgen.
+aorta = [
+  "scikit-image>=0.19.0",
+  "monai-physio[netgen]",
+]
 # Development, testing, and documentation tooling -- no CUDA/cupy component,
 # for pairing with `uv pip install --torch-backend=auto -e ".[dev]"`.
 dev = [
@@ -264,18 +272,20 @@ dev = [
   "imageio-ffmpeg>=0.5.0",
 ]
 # Full source/dev installs: CUDA-matched acceleration plus dev/test/docs
-# tooling, plus every optional Python backend (netgen) so the full test suite
+# tooling, plus every optional extra (netgen, aorta) so the full test suite
 # can run. Recommended for anyone building from source, per the assumption
 # that a source install implies wanting to run tests and build docs too.
 dev_cuda13 = [
   "monai-physio[cuda13]",
   "monai-physio[dev]",
   "monai-physio[netgen]",
+  "monai-physio[aorta]",
 ]
 dev_cuda12 = [
   "monai-physio[cuda12]",
   "monai-physio[dev]",
   "monai-physio[netgen]",
+  "monai-physio[aorta]",
 ]
 
 [project.urls]
